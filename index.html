@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CineLista</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://image.tmdb.org; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'">
+  <style>
+    :root{--bg:#0b0d10;--panel:#13161a;--muted:#7b8a97;--accent:#36d399;--text:#e6edf3}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,"Helvetica Neue",Arial}
+    header{position:sticky;top:0;z-index:10;background:rgba(11,13,16,.9);backdrop-filter:saturate(1.4) blur(6px);border-bottom:1px solid #1e2329}
+    .wrap{max-width:1100px;margin:0 auto;padding:14px}
+    h1{margin:0;font-size:18px}
+    .grid{display:grid;gap:12px}
+    .cols{grid-template-columns:1.1fr .9fr}
+    @media (max-width:900px){.cols{grid-template-columns:1fr}}
+    input,button{border:1px solid #26303a;background:#0e1115;color:var(--text);padding:10px 12px;border-radius:10px}
+    button{cursor:pointer}
+    .pan{background:var(--panel);border:1px solid #1e2329;border-radius:14px;padding:14px}
+    .muted{color:var(--muted)}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .movies{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
+    .card{background:#0e1115;border:1px solid #1e2329;border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+    .poster{aspect-ratio:2/3;background:#0b0d10;display:block;width:100%;object-fit:cover}
+    .card .body{padding:10px;display:grid;gap:8px}
+    .title{font-weight:600;font-size:14px}
+    .badge{font-size:12px;color:#a8b3bd}
+    .actions{display:flex;gap:6px}
+    .pill{padding:6px 8px;border-radius:999px;border:1px solid #2a323c;background:#0f1317;font-size:12px}
+    .ok{border-color:#265749}
+    .warn{border-color:#60462a}
+    .danger{border-color:#603a3a}
+    footer{padding:32px 0;color:#74808c}
+    .kbd{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#9fb2c4}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap row" style="justify-content:space-between">
+      <h1>🎬 CineLista</h1>
+      <div id="userBox" class="row muted">Modo: <b>Single‑user</b></div>
+    </div>
+  </header>
+
+  <main class="wrap grid cols" style="margin-top:14px">
+    <section class="grid" style="gap:14px">
+      <div class="pan grid" style="gap:10px">
+        <div class="row" style="justify-content:space-between;align-items:end">
+          <div class="grid" style="gap:6px">
+            <label for="q">Buscar filmes</label>
+            <div class="row" style="gap:8px">
+              <input id="q" placeholder="Digite o nome do filme (ex.: Interstellar)" style="flex:1" />
+              <button id="btnSearch">Buscar</button>
+              <button id="btnPopular" title="Tendências do dia">Tendências</button>
+            </div>
+            <div class="kbd">Dados: TMDB.</div>
+          </div>
+          <div>
+            <button id="btnMyLists">Minhas listas</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="results" class="movies"></div>
+    </section>
+
+    <aside class="grid" style="gap:14px">
+      <div class="pan" id="localPanel">
+        <h3 style="margin:0 0 10px">Preferências locais</h3>
+        <div class="muted" style="margin-bottom:8px">Sem login. Suas listas ficam no <b>navegador</b>.</div>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <button id="btnExport" class="pill">Exportar JSON</button>
+          <label class="pill" style="display:flex;align-items:center;gap:6px;cursor:pointer">Importar JSON <input id="fileImport" type="file" accept="application/json" style="display:none"></label>
+          <button id="btnClear" class="pill danger">Limpar tudo</button>
+        </div>
+      </div>
+
+      <div class="pan">
+        <h3 style="margin:0 0 10px">Minhas listas</h3>
+        <div class="row" style="gap:6px;flex-wrap:wrap">
+          <span class="pill">⭐ Favoritos: <b id="count-fav">0</b></span>
+          <span class="pill">👁️ Assistidos: <b id="count-watched">0</b></span>
+          <span class="pill">📝 Watchlist: <b id="count-watchlist">0</b></span>
+        </div>
+        <div id="myLists" class="grid" style="gap:8px;margin-top:10px"></div>
+      </div>
+
+      <div class="pan muted" style="font-size:13px">
+        <b>Como usar</b>
+        <ol>
+          <li>Busque filmes.</li>
+          <li>Clique em ⭐, 👁️ ou ➕ para salvar localmente.</li>
+          <li>Suas escolhas aparecem em "Minhas listas" (salvas no navegador).</li>
+        </ol>
+        <div style="margin-top:8px">Dica: pressione <span class="kbd">/</span> para focar a busca.</div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="wrap" style="margin-top:20px">
+    <div class="row" style="justify-content:space-between">
+      <div>Dados de filmes por <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>. Este produto usa a API do TMDB, mas não é endossado por ela.</div>
+      <div>Feito por E.V.O.X • Hospedado na Vercel</div>
+    </div>
+  </footer>
+
+  <script>
+    // ====== Config: apenas proxy TMDB via /api ======
+    const API = {
+      tmdbSearch: (q) => `/api/tmdb/search?q=${encodeURIComponent(q)}`,
+      tmdbTrending: () => `/api/tmdb/trending`,
+      tmdbMovie: (id) => `/api/tmdb/movie?id=${id}`,
+    };
+    const IMG = (p)=> p ? `https://image.tmdb.org/t/p/w342${p}` : "";
+
+    // ====== UI helpers ======
+    const $ = sel => document.querySelector(sel);
+    const $$ = sel => Array.from(document.querySelectorAll(sel));
+    function toast(msg){
+      const t = document.createElement('div'); t.textContent = msg;
+      Object.assign(t.style,{position:'fixed',bottom:'18px',left:'50%',transform:'translateX(-50%)',background:'#111',color:'#fff',padding:'10px 14px',border:'1px solid #2c333a',borderRadius:'10px',zIndex:9999});
+      document.body.appendChild(t); setTimeout(()=>t.remove(),1800);
+    }
+
+    function card(movie){
+      const {id,title,release_date,poster_path,vote_average} = movie;
+      const y = release_date ? release_date.split('-')[0] : "";
+      return `
+        <div class="card" data-id="${id}">
+          <img class="poster" loading="lazy" src="${IMG(poster_path)}" alt="${title}"/>
+          <div class="body">
+            <div class="title">${title}</div>
+            <div class="badge">${y} • ⭐ ${vote_average?.toFixed?.(1) ?? '—'}</div>
+            <div class="actions">
+              <button class="pill ok" data-action="fav">⭐</button>
+              <button class="pill warn" data-action="watched">👁️</button>
+              <button class="pill" data-action="watchlist">➕</button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // ====== Armazenamento local ======
+    const STORE_KEY = 'mini-lbx-store-v1';
+    function getStore(){
+      try{ return JSON.parse(localStorage.getItem(STORE_KEY)) || {fav:[], watched:[], watchlist:[]}; }
+      catch{ return {fav:[], watched:[], watchlist:[]}; }
+    }
+    function setStore(s){ localStorage.setItem(STORE_KEY, JSON.stringify(s)); }
+    function hasItem(s, status, id){ return s[status].some(x=>x.id===id); }
+    function pushItem(s, status, item){ if(!hasItem(s,status,item.id)) s[status].unshift(item); }
+
+    async function addToList(movie_id, status){
+      const r = await fetch(API.tmdbMovie(movie_id));
+      if(!r.ok){ toast('Erro ao buscar meta do filme'); return; }
+      const m = await r.json();
+      const s = getStore();
+      pushItem(s, status, { id: movie_id, status, title: m.title, poster_path: m.poster_path });
+      setStore(s);
+      toast('Salvo localmente!');
+      refreshCounts(); loadMyLists();
+    }
+
+    async function getCounts(){
+      const s = getStore();
+      return { fav: s.fav.length, watched: s.watched.length, watchlist: s.watchlist.length };
+    }
+
+    async function refreshCounts(){
+      const c = await getCounts();
+      $('#count-fav').textContent = c.fav;
+      $('#count-watched').textContent = c.watched;
+      $('#count-watchlist').textContent = c.watchlist;
+    }
+
+    async function loadMyLists(){
+      const s = getStore();
+      const items = [...s.fav, ...s.watched, ...s.watchlist];
+      if(!items.length){ $('#myLists').innerHTML = '<div class="muted">Nenhum item ainda.</div>'; return; }
+      const html = items.map(m => `
+        <div class="row" style="gap:8px">
+          <img src="${IMG(m.poster_path)}" alt="" style="width:36px;height:54px;border-radius:6px;object-fit:cover"/>
+          <div>${m.title} <span class="muted">(${m.status})</span></div>
+        </div>`).join('');
+      $('#myLists').innerHTML = html;
+    }
+
+    // ====== Bindings ======
+    function bindUI(){
+      $('#btnSearch').onclick = async()=>{
+        const q = $('#q').value.trim(); if(!q) return;
+        const data = await searchMovies(q); $('#results').innerHTML = (data.results||[]).map(card).join('');
+      };
+      $('#btnPopular').onclick = async()=>{
+        const data = await trending(); $('#results').innerHTML = (data.results||[]).map(card).join('');
+      };
+      $('#results').addEventListener('click', (e)=>{
+        const btn = e.target.closest('button'); if(!btn) return;
+        const cardEl = e.target.closest('.card');
+        const id = Number(cardEl?.dataset?.id);
+        const act = btn.dataset.action;
+        if(id && act) addToList(id, act);
+      });
+      document.addEventListener('keydown', (ev)=>{ if(ev.key === '/'){ ev.preventDefault(); $('#q').focus(); }});
+      $('#btnMyLists').onclick = ()=>{ loadMyLists(); window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'}); };
+
+      // Export/Import/Clear
+      $('#btnExport').onclick = ()=>{
+        const blob = new Blob([JSON.stringify(getStore(),null,2)], {type:'application/json'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'minilbx-backup.json'; a.click();
+      };
+      $('#fileImport').onchange = async (ev)=>{
+        const f = ev.target.files?.[0]; if(!f) return; const text = await f.text();
+        try{ const s = JSON.parse(text); setStore({ fav:s.fav||[], watched:s.watched||[], watchlist:s.watchlist||[] }); toast('Importado!'); refreshCounts(); loadMyLists(); }
+        catch{ toast('Arquivo inválido'); }
+      };
+      $('#btnClear').onclick = ()=>{ if(confirm('Apagar todas as listas locais?')){ setStore({fav:[],watched:[],watchlist:[]}); refreshCounts(); loadMyLists(); }};
+    }
+
+    // ====== Network (TMDB via /api) ======
+    async function searchMovies(q){ const r = await fetch(API.tmdbSearch(q)); return r.json(); }
+    async function trending(){ const r = await fetch(API.tmdbTrending()); return r.json(); }
+
+    // ====== Init ======
+    (async function(){
+      bindUI(); await refreshCounts();
+      const t = await trending(); $('#results').innerHTML = (t.results||[]).map(card).join('');
+    })();
+  </script>
+</body>
+</html>
