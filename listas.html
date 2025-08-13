@@ -47,10 +47,13 @@
     .tag:hover{filter:brightness(1.1)}
 
     /* Estrelas (0.5) */
-    .stars{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
-    .star{font-size:20px;line-height:1;user-select:none;color:var(--baseStar);cursor:pointer;transition:transform .05s}
-    .star.on{color:var(--accent)}
-    .star.half{background:linear-gradient(90deg,var(--accent) 50%, var(--baseStar) 50%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .stars{display:inline-flex;gap:8px;align-items:center;cursor:pointer}
+    .star{font-size:24px;line-height:1;user-select:none;color:#3a4755;cursor:pointer;transition:transform .05s}
+    .star.on{color:#36d399}
+    .star.half{
+      background:linear-gradient(90deg,#36d399 50%, #3a4755 50%);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text
+    }
     .star:hover{transform:scale(1.08)}
   </style>
 </head>
