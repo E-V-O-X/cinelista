@@ -43,8 +43,25 @@
     dialog::backdrop{background:rgba(0,0,0,.6)}
     .modal-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #1e2329}
     .modal-body{display:grid;gap:12px;padding:14px}
-    .tag{display:inline-block;padding:4px 8px;border:1px solid #2a323c;border-radius:999px;margin:0 6px 6px 0;font-size:12px;cursor:pointer}
-    .tag:hover{filter:brightness(1.1)}
+    .tag{
+      display:inline-block;
+      padding:6px 10px;
+      border:1px solid #2a323c;
+      border-radius:999px;
+      margin:0 6px 6px 0;
+      font-size:12px;
+      cursor:pointer;
+      background:#14181c;   /* fundo neutro */
+      color:#fff;           /* texto branco */
+      appearance:none;      /* remove estilo nativo do botão */
+      -webkit-appearance:none;
+    }
+    .tag.person{
+      background:#14181c;   /* mantém neutro p/ pessoa */
+      color:#fff;
+      border-color:#2a323c;
+    }
+    .tag:hover{ filter:brightness(1.07); }
 
     /* Estrelas (0.5) */
     .stars{display:inline-flex;gap:8px;align-items:center;cursor:pointer}
