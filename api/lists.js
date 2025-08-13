@@ -3,6 +3,18 @@ const { getUserFromReq, enforceOrigin } = require("./_lib/auth");
 
 module.exports = async (req, res) => {
   const me = getUserFromReq(req);
+  if (req.method === "OPTIONS") {
+    // habilita CORS básico para o preflight
+    const origin = req.headers.origin || "";
+    if (origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+    }
+    res.setHeader("Access-Control-Allow-Methods","GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers","Content-Type");
+    return res.status(204).end();
+  }
+
   if (!me) return res.status(401).json({ error: "unauthorized" });
 
   if (req.method === "GET") {
