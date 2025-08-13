@@ -85,6 +85,11 @@
         </nav>
       </div>
       <div class="row muted">Modo: <b>single-user</b></div>
+      <div id="session" class="row">
+        <span id="who" class="muted"></span>
+        <button id="loginBtn">Entrar</button>
+        <button id="logoutBtn" style="display:none">Sair</button>
+      </div>
     </div>
   </header>
 
@@ -309,5 +314,124 @@
     // Init
     (function(){ render(currentTab); })();
   </script>
+
+  <script>
+    const SESSION = { user: null };
+    async function api(path, opts={}) {
+      const r = await fetch(path, { credentials: "include", ...opts });
+      return r;
+    }
+    async function whoami() {
+      const r = await api("/api/auth/me");
+      const j = await r.json();
+      SESSION.user = j.user;
+      updateSessionUI();
+      return SESSION.user;
+    }
+    function updateSessionUI() {
+      const w = document.getElementById("who");
+      const inBtn = document.getElementById("loginBtn");
+      const outBtn = document.getElementById("logoutBtn");
+      if (SESSION.user) {
+        w.textContent = `Logado como @${SESSION.user.username}`;
+        inBtn.style.display = "none"; outBtn.style.display = "";
+      } else {
+        w.textContent = "Não logado";
+        inBtn.style.display = ""; outBtn.style.display = "none";
+      }
+    }
+    async function loadServerStore() {
+      const r = await api("/api/lists");
+      if (!r.ok) return;
+      const { data } = await r.json();
+      if (data) {
+        localStorage.setItem(STORE_KEY, JSON.stringify(data));
+      } else {
+        await saveServerStore();
+      }
+    }
+    let saveTimer;
+    async function saveServerStore() {
+      if (!SESSION.user) return;
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(async ()=>{
+        try {
+          await api("/api/lists", {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ data: getStore() })
+          });
+        } catch {}
+      }, 250);
+    }
+    
+    // Hook: toda vez que setStore for chamado, também salva no servidor
+    const _setStoreReal = setStore;
+    setStore = function(s){ _setStoreReal(s); saveServerStore(); };
+    
+    // Abrir/fechar modal e ações
+    (function bindAuthUI(){
+      const m = document.getElementById("authModal");
+      const open = document.getElementById("loginBtn");
+      const close = document.getElementById("authClose");
+      const doLogin = document.getElementById("doLogin");
+      const doRegister = document.getElementById("doRegister");
+      const msg = document.getElementById("authMsg");
+    
+      open?.addEventListener("click", ()=>{ msg.textContent=""; m.showModal(); });
+      close?.addEventListener("click", ()=> m.close());
+    
+      doLogin?.addEventListener("click", async (ev)=>{
+        ev.preventDefault();
+        msg.textContent = "Entrando...";
+        const u = document.getElementById("authUser").value.trim();
+        const p = document.getElementById("authPass").value.trim();
+        const r = await api("/api/auth/login", { method:"POST", body: JSON.stringify({ username: u, password: p })});
+        const j = await r.json();
+        if (!r.ok) { msg.textContent = j.error || "Erro ao entrar"; return; }
+        m.close();
+        await whoami();
+        await loadServerStore();
+        if (typeof render === "function") render(currentTab || "fav"); // listas.html
+      });
+    
+      doRegister?.addEventListener("click", async ()=>{
+        msg.textContent = "Registrando...";
+        const u = document.getElementById("authUser").value.trim();
+        const p = document.getElementById("authPass").value.trim();
+        const r = await api("/api/auth/register", { method:"POST", body: JSON.stringify({ username: u, password: p })});
+        const j = await r.json();
+        if (!r.ok) { msg.textContent = j.error || "Erro ao registrar"; return; }
+        m.close();
+        await whoami();
+        await loadServerStore();
+        if (typeof render === "function") render(currentTab || "fav");
+      });
+    
+      document.getElementById("logoutBtn")?.addEventListener("click", async ()=>{
+        await api("/api/auth/logout", { method: "POST" });
+        SESSION.user = null;
+        updateSessionUI();
+      });
+    })();
+    
+    // Inicia sessão na carga da página
+    whoami().then(async (u)=>{ if(u) await loadServerStore(); });
+</script>
+  
+    <dialog id="authModal">
+    <form id="authForm" method="dialog" style="display:grid;gap:10px;min-width:280px">
+      <h3>Entrar / Registrar</h3>
+      <input id="authUser" placeholder="usuário (3-32, a-z 0-9 . _)" />
+      <input id="authPass" type="password" placeholder="senha (6+)" />
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="doLogin">Entrar</button>
+        <button id="doRegister" type="button">Registrar</button>
+        <button id="authClose" type="button">Fechar</button>
+      </div>
+      <div id="authMsg" class="muted"></div>
+    </form>
+  </dialog>
+  
 </body>
 </html>
