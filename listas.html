@@ -386,7 +386,11 @@
         msg.textContent = "Entrando...";
         const u = document.getElementById("authUser").value.trim();
         const p = document.getElementById("authPass").value.trim();
-        const r = await api("/api/auth/login", { method:"POST", body: JSON.stringify({ username: u, password: p })});
+        const r = await api("/api/auth/login", {
+          method:"POST",
+          headers:{ "content-type":"application/json" },
+          body: JSON.stringify({ username: u, password: p })
+        });
         const j = await r.json();
         if (!r.ok) { msg.textContent = j.error || "Erro ao entrar"; return; }
         m.close();
@@ -399,7 +403,11 @@
         msg.textContent = "Registrando...";
         const u = document.getElementById("authUser").value.trim();
         const p = document.getElementById("authPass").value.trim();
-        const r = await api("/api/auth/register", { method:"POST", body: JSON.stringify({ username: u, password: p })});
+        const r = await api("/api/auth/register", {
+          method:"POST",
+          headers:{ "content-type":"application/json" },
+          body: JSON.stringify({ username: u, password: p })
+        });
         const j = await r.json();
         if (!r.ok) { msg.textContent = j.error || "Erro ao registrar"; return; }
         m.close();
