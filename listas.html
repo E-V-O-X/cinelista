@@ -13,7 +13,7 @@
                  connect-src 'self'">
 
   <style>
-    :root{--bg:#0b0d10;--panel:#13161a;--muted:#8fa1b3;--accent:#36d399;--danger:#e25555;--text:#e6edf3}
+    :root{--bg:#0b0d10;--panel:#13161a;--muted:#8fa1b3;--accent:#36d399;--danger:#e25555;--text:#e6edf3;--baseStar:#3a4755}
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial}
     header{position:sticky;top:0;z-index:10;background:rgba(11,13,16,.9);backdrop-filter:saturate(1.4) blur(6px);border-bottom:1px solid #1e2329}
@@ -38,7 +38,6 @@
     .btn-danger{border-color:#a33;background:#2a1517}
     .btn-danger:hover{background:#3a1b1f;border-color:#d44}
     .btn-sm{padding:6px 10px;font-size:12px}
-
     footer{padding:32px 0;color:#74808c}
 
     dialog{border:1px solid #2a323c;border-radius:14px;max-width:720px;width:calc(100% - 24px);background:#0e1115;color:var(--text)}
@@ -47,13 +46,12 @@
     .modal-body{display:grid;gap:12px;padding:14px}
     .tag{display:inline-block;padding:4px 8px;border:1px solid #2a323c;border-radius:999px;margin-right:6px;font-size:12px}
 
-    /* Estrelas */
-    .stars{display:inline-flex;gap:4px;align-items:center}
-    .star{font-size:18px;line-height:1;cursor:pointer;color:#3a4755;user-select:none}
+    /* Estrelas (0.5) */
+    .stars{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+    .star{font-size:20px;line-height:1;user-select:none;color:var(--baseStar);cursor:pointer;transition:transform .05s}
     .star.on{color:var(--accent)}
+    .star.half{background:linear-gradient(90deg,var(--accent) 50%, var(--baseStar) 50%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
     .star:hover{transform:scale(1.08)}
-    .pill{padding:6px 8px;border-radius:999px;border:1px solid #2a323c;background:#0f1317;font-size:12px}
-    .pill.tiny{padding:4px 8px;font-size:11px}
   </style>
 </head>
 <body>
@@ -77,7 +75,6 @@
         <button class="tab" data-tab="watched">👁️ Assistidos (<b id="c-watched">0</b>)</button>
         <button class="tab" data-tab="watchlist">📝 Watchlist (<b id="c-watchlist">0</b>)</button>
         <span style="flex:1"></span>
-        <!-- Exporta apenas a Watchlist como .txt -->
         <button id="btnExportWatchlist" class="btn btn-sm">Exportar Watchlist (.txt)</button>
         <button id="btnClear" class="btn btn-danger btn-sm">Limpar tudo</button>
       </div>
@@ -93,11 +90,11 @@
     </div>
   </footer>
 
-  <!-- Modal de detalhes (também com estrelas) -->
+  <!-- Modal (detalhes + estrelas) -->
   <dialog id="movieModal">
     <div class="modal-head">
       <strong id="mTitle">Título</strong>
-      <button id="mClose" class="pill">Fechar</button>
+      <button id="mClose" class="btn">Fechar</button>
     </div>
     <div class="modal-body">
       <div class="row">
@@ -108,6 +105,7 @@
           <div style="margin-top:10px">
             <div class="muted" style="margin-bottom:4px">Sua nota</div>
             <div id="mStars" class="stars"></div>
+            <button id="mZero" class="btn btn-danger" style="margin-left:8px">Zerar nota</button>
           </div>
         </div>
       </div>
@@ -129,11 +127,14 @@
     function setCounts(){ const c=counts(); $('#c-fav').textContent=c.fav; $('#c-watched').textContent=c.watched; $('#c-watchlist').textContent=c.watchlist; }
     function setRating(id, val){ const s=getStore(); if(val>0) s.ratings[id]=val; else delete s.ratings[id]; setStore(s); }
 
+    // ===== Estrelas (0.5) =====
     function starsHtml(id){
       const cur = Number(getStore().ratings[id] ?? 0);
       return `<div class="stars" data-id="${id}">
-        ${[1,2,3,4,5].map(i=>`<span class="star ${i<=cur?'on':''}" data-val="${i}">★</span>`).join('')}
-        <button class="pill tiny clear-rating" data-id="${id}">Zerar</button>
+        ${[1,2,3,4,5].map(i=>{
+          const cls = cur>=i ? 'on' : (cur>=i-0.5 ? 'half' : '');
+          return `<span class="star ${cls}" data-i="${i}">★</span>`;
+        }).join('')}
       </div>`;
     }
 
@@ -168,7 +169,7 @@
       }
     });
 
-    // Interações da lista (remover, abrir, estrelas)
+    // Interações da lista (remover, abrir, estrelas com meia-estrela)
     $('#list').addEventListener('click', async (e)=>{
       const item = e.target.closest('.item'); if(!item) return;
       const id = Number(item.dataset.id);
@@ -183,20 +184,20 @@
         return;
       }
       if(e.target.classList.contains('star')){
-        const val = Number(e.target.dataset.val);
+        const i = Number(e.target.dataset.i);
+        const rect = e.target.getBoundingClientRect();
+        const leftHalf = (e.clientX - rect.left) < rect.width/2;
+        const val = leftHalf ? (i - 0.5) : i;
         setRating(id, val);
-        render(currentTab);
-        return;
-      }
-      if(e.target.classList.contains('clear-rating')){
-        setRating(id, 0);
-        render(currentTab);
+        render(currentTab);                // <<< atualiza a lista imediatamente
         return;
       }
     });
 
-    // Modal de detalhes + estrelas
+    // Modal de detalhes + estrelas (espelha nota e re-renderiza lista)
+    let currentModalId = null;
     async function showDetails(id){
+      currentModalId = id;
       const r = await fetch(API.tmdbMovie(id)); if(!r.ok) return;
       const m = await r.json();
       $('#mTitle').textContent = m.title || m.name || 'Filme';
@@ -208,26 +209,30 @@
       $('#mOverview').textContent = m.overview || 'Sem sinopse.';
       $('#mGenres').innerHTML = (m.genres||[]).map(g=>`<span class="tag">${g.name}</span>`).join('');
 
-      // Estrelas no modal
       const wrap = document.getElementById('mStars');
       wrap.innerHTML = '';
       const cur = Number(getStore().ratings[id] ?? 0);
-      [1,2,3,4,5].forEach(i=>{
+      for(let i=1;i<=5;i++){
         const s = document.createElement('span');
-        s.className = 'star' + (i<=cur?' on':'');
+        s.className = 'star';
+        if(cur>=i) s.classList.add('on'); else if(cur>=i-0.5) s.classList.add('half');
         s.textContent = '★';
-        s.onclick = ()=>{ setRating(id, i); showDetails(id); }; // re-render
+        s.onclick = (e)=>{
+          const rect = e.target.getBoundingClientRect();
+          const leftHalf = (e.clientX - rect.left) < rect.width/2;
+          const val = leftHalf ? (i - 0.5) : i;
+          setRating(id, val);
+          showDetails(id); // re-render modal
+          render(currentTab); // e atualiza a lista sem recarregar
+        };
         wrap.appendChild(s);
-      });
-      const zero = document.createElement('button');
-      zero.className = 'pill tiny';
-      zero.textContent = 'Zerar';
-      zero.onclick = ()=>{ setRating(id, 0); showDetails(id); };
-      wrap.appendChild(zero);
-
+      }
       document.getElementById('movieModal').showModal();
     }
     document.getElementById('mClose').onclick = ()=> document.getElementById('movieModal').close();
+    document.getElementById('mZero').onclick = ()=>{
+      if(currentModalId){ setRating(currentModalId, 0); showDetails(currentModalId); render(currentTab); }
+    };
 
     // Exportar apenas a Watchlist como .txt
     document.getElementById('btnExportWatchlist').onclick = ()=>{
