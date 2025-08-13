@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Cinelista — Explorar</title>
 
-  <!-- CSP simples (permitindo inline JS e CSS para facilitar) -->
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  img-src 'self' https://image.tmdb.org data:;
@@ -14,7 +13,7 @@
                  connect-src 'self'">
 
   <style>
-    :root{--bg:#0b0d10;--panel:#13161a;--muted:#8fa1b3;--accent:#36d399;--danger:#e25555;--text:#e6edf3}
+    :root{--bg:#0b0d10;--panel:#13161a;--muted:#8fa1b3;--accent:#36d399;--danger:#e25555;--text:#e6edf3;--baseStar:#3a4755}
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial}
     header{position:sticky;top:0;z-index:10;background:rgba(11,13,16,.9);backdrop-filter:saturate(1.4) blur(6px);border-bottom:1px solid #1e2329}
@@ -28,7 +27,8 @@
     input,button{border:1px solid #26303a;background:#0e1115;color:var(--text);padding:10px 12px;border-radius:10px}
     button{cursor:pointer}
     .movies{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
-    .card{background:#0e1115;border:1px solid #1e2329;border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+    .card{position:relative;background:#0e1115;border:1px solid #1e2329;border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+    .card.seen::after{content:"👁️ Visto";position:absolute;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-weight:700;letter-spacing:.3px}
     .poster{aspect-ratio:2/3;background:#0b0d10;display:block;width:100%;object-fit:cover;cursor:pointer}
     .body{padding:10px;display:grid;gap:8px}
     .title{font-weight:600;font-size:14px;cursor:pointer}
@@ -38,6 +38,12 @@
     .ok{border-color:#265749}.warn{border-color:#60462a}
     footer{padding:32px 0;color:#74808c}
 
+    /* Botões do modal mais legíveis */
+    .btn{padding:8px 12px;border-radius:10px;border:1px solid #2a323c;background:#14181c;color:var(--text);font-weight:600;cursor:pointer}
+    .btn:hover{filter:brightness(1.1)}
+    .btn-secondary{background:#0f1317}
+    .btn-danger{border-color:#a33;background:#2a1517}
+
     /* Modal (dialog) */
     dialog{border:1px solid #2a323c;border-radius:14px;max-width:720px;width:calc(100% - 24px);background:#0e1115;color:var(--text)}
     dialog::backdrop{background:rgba(0,0,0,.6)}
@@ -46,12 +52,12 @@
     .muted{color:var(--muted)}
     .tag{display:inline-block;padding:4px 8px;border:1px solid #2a323c;border-radius:999px;margin-right:6px;font-size:12px}
 
-    /* Estrelas (rating) */
-    .stars{display:inline-flex;gap:4px;align-items:center}
-    .star{font-size:20px;line-height:1;cursor:pointer;color:#3a4755;user-select:none}
+    /* Estrelas (0.5) */
+    .stars{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+    .star{font-size:22px;line-height:1;user-select:none;color:var(--baseStar);cursor:pointer;transition:transform .05s}
     .star.on{color:var(--accent)}
+    .star.half{background:linear-gradient(90deg,var(--accent) 50%, var(--baseStar) 50%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
     .star:hover{transform:scale(1.1)}
-    .pill.tiny{padding:4px 8px;font-size:11px}
   </style>
 </head>
 <body>
@@ -93,7 +99,7 @@
   <dialog id="movieModal">
     <div class="modal-head">
       <strong id="mTitle">Título</strong>
-      <button id="mClose" class="pill">Fechar</button>
+      <button id="mClose" class="btn btn-secondary">Fechar</button>
     </div>
     <div class="modal-body">
       <div class="row">
@@ -104,6 +110,7 @@
           <div style="margin-top:10px">
             <div class="muted" style="margin-bottom:4px">Sua nota</div>
             <div id="mStars" class="stars"></div>
+            <button id="mZero" class="btn btn-danger" style="margin-left:8px">Zerar nota</button>
           </div>
         </div>
       </div>
@@ -136,6 +143,7 @@
     function hasItem(s, status, id){ return s[status].some(x=>x.id===id); }
     function pushItem(s, status, item){ if(!hasItem(s,status,item.id)) s[status].unshift(item); }
     function setRating(id, val){ const s=getStore(); if(val>0) s.ratings[id]=val; else delete s.ratings[id]; setStore(s); }
+    function isWatched(id){ return getStore().watched.some(x=>x.id===id); }
 
     // ====== UI helpers ======
     function toast(msg){
@@ -144,10 +152,33 @@
       document.body.appendChild(t); setTimeout(()=>t.remove(),1600);
     }
 
+    // ====== Estrelas (0.5) ======
+    function renderStars(el, movieId){
+      const cur = Number(getStore().ratings[movieId] ?? 0);
+      el.innerHTML = '';
+      for(let i=1;i<=5;i++){
+        const span = document.createElement('span');
+        span.className = 'star';
+        if(cur >= i) span.classList.add('on');
+        else if(cur >= i - 0.5) span.classList.add('half');
+        span.textContent = '★';
+        span.addEventListener('click', (e)=>{
+          const rect = e.target.getBoundingClientRect();
+          const leftHalf = (e.clientX - rect.left) < rect.width/2;
+          const val = leftHalf ? (i - 0.5) : i;
+          setRating(movieId, val);
+          renderStars(el, movieId);
+        });
+        el.appendChild(span);
+      }
+    }
+
+    // ====== Cards ======
     function card(m){
       const y = m.release_date ? m.release_date.split('-')[0] : '';
+      const seenClass = isWatched(m.id) ? 'seen' : '';
       return `
-        <div class="card" data-id="${m.id}">
+        <div class="card ${seenClass}" data-id="${m.id}">
           <img class="poster" loading="lazy" src="${IMG(m.poster_path)}" alt="${m.title}">
           <div class="body">
             <div class="title" data-open="1">${m.title}</div>
@@ -161,28 +192,10 @@
         </div>`;
     }
 
-    // ====== Estrelas (render e eventos) ======
-    function renderStars(el, movieId){
-      const s = getStore();
-      const cur = Number(s.ratings[movieId] ?? 0);
-      el.innerHTML = '';
-      for(let i=1;i<=5;i++){
-        const span = document.createElement('span');
-        span.className = 'star' + (i<=cur ? ' on':'');
-        span.textContent = '★';
-        span.dataset.val = i;
-        span.onclick = ()=>{ setRating(movieId, i); renderStars(el, movieId); toast(`Nota: ${i}/5`); };
-        el.appendChild(span);
-      }
-      const zero = document.createElement('button');
-      zero.className = 'pill tiny';
-      zero.textContent = 'Zerar';
-      zero.onclick = ()=>{ setRating(movieId, 0); renderStars(el, movieId); toast('Nota removida'); };
-      el.appendChild(zero);
-    }
-
-    // ====== Detalhes (modal) ======
+    // ====== Modal ======
+    let currentMovieId = null;
     async function showDetails(id){
+      currentMovieId = id;
       const r = await fetch(API.tmdbMovie(id));
       if(!r.ok) { toast('Erro ao carregar detalhes'); return; }
       const m = await r.json();
@@ -231,10 +244,13 @@
         const s = getStore();
         pushItem(s, act, { id, status: act, title: meta.title, poster_path: meta.poster_path });
         setStore(s);
+        if(act==='watched') card.classList.add('seen'); // overlay imediato
         toast('Salvo! Vá em “Listas” para ver.');
       });
 
-      $('#mClose').onclick = ()=> $('#movieModal').close();
+      // Modal controls
+      $('#mClose').onclick = ()=> document.getElementById('movieModal').close();
+      $('#mZero').onclick = ()=>{ if(currentMovieId){ setRating(currentMovieId, 0); renderStars(document.getElementById('mStars'), currentMovieId); } };
     }
 
     // ====== Init ======
