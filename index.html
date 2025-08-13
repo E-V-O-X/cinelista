@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Cinelista — Explorar</title>
 
+  <!-- CSP simples para permitir imagens do TMDB e nosso JS inline -->
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  img-src 'self' https://image.tmdb.org data:;
@@ -46,14 +47,14 @@
     .actions{display:flex;gap:6px}
     .pill{position:relative;padding:6px 8px;border-radius:999px;border:1px solid #2a323c;background:#0f1317;font-size:12px}
     .ok{border-color:#265749}.warn{border-color:#60462a}
-    .pill.on{opacity:.7}
+    .pill.on{opacity:.75}
     .pill.on::after{
       content:'−'; position:absolute; top:-6px; right:-6px; width:18px; height:18px;
       border-radius:50%; background:#2a1517; border:1px solid #a33; color:#fff;
       font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center; pointer-events:none;
     }
 
-    /* pager */
+    /* paginação */
     .pager{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;margin-top:10px}
     .page-btn{padding:8px 10px;border:1px solid #2a323c;background:#0f1317;border-radius:10px;color:var(--text);cursor:pointer}
     .page-btn[disabled]{opacity:.5;cursor:not-allowed}
@@ -61,7 +62,7 @@
 
     footer{padding:32px 0;color:#74808c}
 
-    /* Modal */
+    /* Botões/modais */
     .btn{padding:8px 12px;border-radius:10px;border:1px solid #2a323c;background:#14181c;color:var(--text);font-weight:600;cursor:pointer}
     .btn:hover{filter:brightness(1.1)}
     .btn-secondary{background:#0f1317}
@@ -72,9 +73,8 @@
     .modal-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #1e2329}
     .modal-body{display:grid;gap:12px;padding:14px}
     .muted{color:var(--muted)}
-    .tag{display:inline-block;padding:6px 10px;border:1px solid #2a323c;border-radius:999px;margin:0 6px 6px 0;font-size:12px;cursor:pointer}
-    .tag:hover{filter:brightness(1.1)}
-    /* nomes de pessoas: fundo neutro + texto branco */
+    .tag{display:inline-block;padding:6px 10px;border:1px solid #2a323c;border-radius:999px;margin:0 6px 6px 0;font-size:12px;cursor:pointer;background:#14181c;color:#fff}
+    .tag:hover{filter:brightness(1.07)}
     .tag.person{background:#14181c;color:#fff;border-color:#2a323c}
 
     /* Estrelas maiores (0.5) */
@@ -95,9 +95,8 @@
           <a href="/listas.html">Listas</a>
         </nav>
       </div>
-      <div class="row muted">Modo: <b>single-user</b></div>
-      <div id="session" class="row">
-        <span id="who" class="muted"></span>
+      <div class="row">
+        <span id="who" class="muted">Não logado</span>
         <button id="loginBtn">Entrar</button>
         <button id="logoutBtn" style="display:none">Sair</button>
       </div>
@@ -112,7 +111,7 @@
         <button id="btnSearch">Buscar</button>
         <button id="btnPopular" title="Tendências do dia">Tendências</button>
       </div>
-      <div id="context" class="muted" style="margin-top:6px">Dados: TMDB.</div>
+      <div id="context" class="muted" style="margin-top:6px">Dados: TMDB via /api (chave protegida na Vercel).</div>
     </section>
 
     <section id="results" class="movies"></section>
@@ -152,16 +151,31 @@
     </div>
   </dialog>
 
+  <!-- Modal de autenticação -->
+  <dialog id="authModal">
+    <form id="authForm" method="dialog" style="display:grid;gap:10px;min-width:280px">
+      <h3>Entrar / Registrar</h3>
+      <input id="authUser" placeholder="usuário (3-32, a-z 0-9 . _)" />
+      <input id="authPass" type="password" placeholder="senha (6+)" />
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="doLogin">Entrar</button>
+        <button id="doRegister" type="button">Registrar</button>
+        <button id="authClose" type="button">Fechar</button>
+      </div>
+      <div id="authMsg" class="muted"></div>
+    </form>
+  </dialog>
+
   <script>
-    // ===== Config / State =====
-    const UI_PAGE_SIZE = 24;                   // 24 por página (UI)
-    const TMDB_PAGE_SIZE = 20;                 // TMDB fixa em 20
+    // ================== Config & Helpers ==================
+    const UI_PAGE_SIZE = 24;        // 24 por página (UI)
+    const TMDB_PAGE_SIZE = 20;      // TMDB fixa em 20
     const API = {
       tmdbSearch: (q, page=1) => `/api/tmdb/search?q=${encodeURIComponent(q)}&page=${page}`,
       tmdbTrending: (page=1) => `/api/tmdb/trending?page=${page}`,
       tmdbMovie: (id) => `/api/tmdb/movie?id=${id}`,
       tmdbCredits: (id) => `/api/tmdb/credits?id=${id}`,
-      tmdbDiscover: (params) => `/api/tmdb/discover?${params}`,          // inclui page na string
+      tmdbDiscover: (params) => `/api/tmdb/discover?${params}`,          // inclui page
       tmdbPersonCredits: (id) => `/api/tmdb/person_credits?id=${id}`,
     };
     const IMG = (p)=> p ? `https://image.tmdb.org/t/p/w342${p}` : "";
@@ -176,17 +190,13 @@
     function pushItem(s, status, item){ if(!hasItem(s,status,item.id)) s[status].unshift(item); }
     function removeItem(s, status, id){ s[status] = s[status].filter(x=>x.id!==id); }
     function setRating(id, val){ const s=getStore(); if(val>0) s.ratings[id]=val; else delete s.ratings[id]; setStore(s); }
-    function isWatched(id){ return getStore().watched.some(x=>x.id===id); }
-    function isFav(id){ return getStore().fav.some(x=>x.id===id); }
 
-    // ===== UI helpers =====
     function toast(msg){
       const t = document.createElement('div'); t.textContent = msg;
       Object.assign(t.style,{position:'fixed',bottom:'18px',left:'50%',transform:'translateX(-50%)',background:'#111',color:'#fff',padding:'10px 14px',border:'1px solid #2a333a',borderRadius:'10px',zIndex:9999});
       document.body.appendChild(t); setTimeout(()=>t.remove(),1600);
     }
 
-    // aplicar estado (seen/fav) e toggles
     function applyStateToCard(cardEl, id){
       const s = getStore();
       cardEl.classList.toggle('seen', s.watched.some(x=>x.id===id));
@@ -201,7 +211,7 @@
       document.querySelectorAll('.card').forEach(c=>applyStateToCard(c, Number(c.dataset.id)));
     }
 
-    // ===== Estrelas (0.5) =====
+    // estrelas (0.5)
     function renderStars(el, movieId){
       const cur = Number(getStore().ratings[movieId] ?? 0);
       el.innerHTML = '';
@@ -222,7 +232,7 @@
       }
     }
 
-    // ===== Card HTML =====
+    // card
     function card(m){
       const y = m.release_date ? m.release_date.split('-')[0] : '';
       return `
@@ -243,7 +253,7 @@
         </div>`;
     }
 
-    // ===== Modal =====
+    // ================== Modal (detalhes) ==================
     let currentMovieId = null;
     async function showDetails(id){
       currentMovieId = id;
@@ -263,10 +273,10 @@
       $('#mMeta').textContent = [year, runtime, `⭐ ${rating}`].filter(Boolean).join(' • ');
       $('#mOverview').textContent = m.overview || 'Sem sinopse.';
 
-      // gêneros (clicáveis)
+      // gêneros (tags)
       $('#mGenres').innerHTML = (m.genres||[]).map(g=>`<span class="tag" data-genre="${g.id}" title="Filtrar por ${g.name}">${g.name}</span>`).join('');
 
-      // crew (clicável)
+      // crew clicável (Direção/Roteiro/Edição)
       const crew = credits.crew || [];
       const dir = crew.filter(x=>x.job==='Director');
       const writers = crew.filter(x=>['Screenplay','Writer','Story','Adaptation'].includes(x.job));
@@ -280,10 +290,10 @@
       ].join('');
 
       renderStars(document.getElementById('mStars'), id);
-      $('#movieModal').showModal();
+      document.getElementById('movieModal').showModal();
     }
 
-    // ===== Pager UI =====
+    // ================== Paginação (24 por página) ==================
     function renderPager(totalPages, currentPage, onGoPage){
       const el = $('#pager'); el.innerHTML = '';
       if(totalPages <= 1) return;
@@ -301,7 +311,6 @@
       el.appendChild(mk('«', 1, {disabled: currentPage===1}));
       el.appendChild(mk('‹', Math.max(1,currentPage-1), {disabled: currentPage===1}));
 
-      // janela inteligente
       const windowSize = 9;
       let start = Math.max(1, currentPage - Math.floor(windowSize/2));
       let end = Math.min(totalPages, start + windowSize - 1);
@@ -315,7 +324,6 @@
       el.appendChild(mk('»', totalPages, {disabled: currentPage===totalPages}));
     }
 
-    // ===== Fetch helpers (24 por página na UI) =====
     function tmdbPagesForUiPage(uiPage){
       const startIdx = (uiPage-1)*UI_PAGE_SIZE;
       const endIdxExclusive = uiPage*UI_PAGE_SIZE;
@@ -350,7 +358,6 @@
       return { items: combined.slice(sliceStartInConcat, sliceEndInConcat), total };
     }
     async function fetchPersonCrewPaged(personId, role, uiPage){
-      // TMDB retorna tudo de uma vez; paginamos no cliente
       const data = await fetch(API.tmdbPersonCredits(personId)).then(r=>r.json());
       const crew = (data.crew||[]).filter(c=>{
         if(role==='director') return c.job==='Director';
@@ -368,7 +375,6 @@
       return { items: all.slice(start, start+UI_PAGE_SIZE), total };
     }
 
-    // ===== Renderer =====
     function renderResults(list, contextText=''){
       $('#results').innerHTML = (list||[]).map(card).join('');
       processRenderedCards();
@@ -376,8 +382,7 @@
       window.scrollTo({top:0, behavior:'smooth'});
     }
 
-    // ===== Query state (para paginação) =====
-    let currentQuery = null; // { kind, params, page, total, fetch(uiPage) }
+    let currentQuery = null; // {kind, params, page, total, context}
 
     async function loadPage(uiPage){
       if(!currentQuery) return;
@@ -396,11 +401,7 @@
       renderPager(totalPages, currentQuery.page, p=>loadPage(p));
     }
 
-    // ===== Network simples =====
-    async function searchMovies(q){ const r = await fetch(API.tmdbSearch(q)); return r.json(); } // só pra "achei N resultados"
-    async function trending(){ const r = await fetch(API.tmdbTrending()); return r.json(); }
-
-    // ===== Bindings =====
+    // ================== Bindings (busca / ações / filtros) ==================
     function bind(){
       $('#btnSearch').onclick = async ()=>{
         const q = $('#q').value.trim(); if(!q) return;
@@ -414,7 +415,7 @@
         await loadPage(1);
       };
 
-      // Cards: abrir / toggles
+      // cards: abrir / toggles
       document.getElementById('results').addEventListener('click', async (e)=>{
         const card = e.target.closest('.card'); if(!card) return;
         const id = Number(card.dataset.id);
@@ -463,7 +464,7 @@
       });
     }
 
-    // ===== Deep link (opcional) =====
+    // ================== Deep link opcional ==================
     function getParams(){
       const p = new URLSearchParams(location.search);
       return { genre: p.get('genre'), person: p.get('person'), role: p.get('role') };
@@ -475,17 +476,7 @@
       return false;
     }
 
-    // ===== Init =====
-    (async function(){
-      bind();
-      // inicial: tendências ou deep link
-      if(!(await applyDeepLink())){
-        currentQuery = { kind:'trending', params:{}, page:1, context:'Tendências do dia' };
-        await loadPage(1);
-      }
-    })();
-  </script>
-  <script>
+    // ================== Sessão ==================
     const SESSION = { user: null };
     async function api(path, opts={}) {
       const r = await fetch(path, { credentials: "include", ...opts });
@@ -534,74 +525,87 @@
         } catch {}
       }, 250);
     }
-    
-    // Hook: toda vez que setStore for chamado, também salva no servidor
+    // hook: toda vez que setStore for chamado, também salva no servidor
     const _setStoreReal = setStore;
     setStore = function(s){ _setStoreReal(s); saveServerStore(); };
-    
-    // Abrir/fechar modal e ações
-    (function bindAuthUI(){
-      const m = document.getElementById("authModal");
-      const open = document.getElementById("loginBtn");
-      const close = document.getElementById("authClose");
-      const doLogin = document.getElementById("doLogin");
-      const doRegister = document.getElementById("doRegister");
-      const msg = document.getElementById("authMsg");
-    
-      open?.addEventListener("click", ()=>{ msg.textContent=""; m.showModal(); });
-      close?.addEventListener("click", ()=> m.close());
-    
-      doLogin?.addEventListener("click", async (ev)=>{
-        ev.preventDefault();
-        msg.textContent = "Entrando...";
-        const u = document.getElementById("authUser").value.trim();
-        const p = document.getElementById("authPass").value.trim();
-        const r = await api("/api/auth/login", { method:"POST", body: JSON.stringify({ username: u, password: p })});
-        const j = await r.json();
-        if (!r.ok) { msg.textContent = j.error || "Erro ao entrar"; return; }
-        m.close();
-        await whoami();
-        await loadServerStore();
-        if (typeof render === "function") render(currentTab || "fav"); // listas.html
-      });
-    
-      doRegister?.addEventListener("click", async ()=>{
-        msg.textContent = "Registrando...";
-        const u = document.getElementById("authUser").value.trim();
-        const p = document.getElementById("authPass").value.trim();
-        const r = await api("/api/auth/register", { method:"POST", body: JSON.stringify({ username: u, password: p })});
-        const j = await r.json();
-        if (!r.ok) { msg.textContent = j.error || "Erro ao registrar"; return; }
-        m.close();
-        await whoami();
-        await loadServerStore();
-        if (typeof render === "function") render(currentTab || "fav");
-      });
-    
-      document.getElementById("logoutBtn")?.addEventListener("click", async ()=>{
-        await api("/api/auth/logout", { method: "POST" });
-        SESSION.user = null;
-        updateSessionUI();
+
+    // ===== UI do modal de autenticação (robusto) =====
+    (function authUI(){
+      window.addEventListener('DOMContentLoaded', ()=>{
+        const modal = document.getElementById('authModal');
+        const msg   = document.getElementById('authMsg');
+
+        document.addEventListener('click', async (e)=>{
+          if (e.target && e.target.id === 'loginBtn') {
+            e.preventDefault();
+            msg.textContent = '';
+            if (modal.showModal) modal.showModal(); else modal.setAttribute('open','');
+            return;
+          }
+          if (e.target && e.target.id === 'authClose') {
+            e.preventDefault();
+            if (modal?.close) modal.close(); else modal?.removeAttribute('open');
+            return;
+          }
+        });
+
+        const doLogin    = document.getElementById('doLogin');
+        const doRegister = document.getElementById('doRegister');
+
+        doLogin?.addEventListener('click', async (ev)=>{
+          ev.preventDefault();
+          msg.textContent = "Entrando...";
+          const u = document.getElementById("authUser").value.trim();
+          const p = document.getElementById("authPass").value.trim();
+          const r = await fetch("/api/auth/login", {
+            method:"POST",
+            credentials:"include",
+            headers:{ "content-type":"application/json" },
+            body: JSON.stringify({ username: u, password: p })
+          });
+          const j = await r.json();
+          if (!r.ok) { msg.textContent = j.error || "Erro ao entrar"; return; }
+          modal?.close?.();
+          await whoami();
+          await loadServerStore();
+          if (typeof render === "function") render(currentTab || "fav");
+        });
+
+        doRegister?.addEventListener('click', async ()=>{
+          msg.textContent = "Registrando...";
+          const u = document.getElementById("authUser").value.trim();
+          const p = document.getElementById("authPass").value.trim();
+          const r = await fetch("/api/auth/register", {
+            method:"POST",
+            credentials:"include",
+            headers:{ "content-type":"application/json" },
+            body: JSON.stringify({ username: u, password: p })
+          });
+          const j = await r.json();
+          if (!r.ok) { msg.textContent = j.error || "Erro ao registrar"; return; }
+          modal?.close?.();
+          await whoami();
+          await loadServerStore();
+          if (typeof render === "function") render(currentTab || "fav");
+        });
+
+        document.getElementById("logoutBtn")?.addEventListener("click", async ()=>{
+          await api("/api/auth/logout", { method: "POST" });
+          SESSION.user = null;
+          updateSessionUI();
+        });
       });
     })();
-    
-    // Inicia sessão na carga da página
-    whoami().then(async (u)=>{ if(u) await loadServerStore(); });
-  </script>
 
-  <dialog id="authModal">
-    <form id="authForm" method="dialog" style="display:grid;gap:10px;min-width:280px">
-      <h3>Entrar / Registrar</h3>
-      <input id="authUser" placeholder="usuário (3-32, a-z 0-9 . _)" />
-      <input id="authPass" type="password" placeholder="senha (6+)" />
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button id="doLogin">Entrar</button>
-        <button id="doRegister" type="button">Registrar</button>
-        <button id="authClose" type="button">Fechar</button>
-      </div>
-      <div id="authMsg" class="muted"></div>
-    </form>
-  </dialog>
-  
+    // ================== Inicialização ==================
+    (async function(){
+      bind();
+      await whoami().then(async (u)=>{ if(u) await loadServerStore(); });
+      if(!(await applyDeepLink())){
+        currentQuery = { kind:'trending', params:{}, page:1, context:'Tendências do dia' };
+        await loadPage(1);
+      }
+    })();
+  </script>
 </body>
 </html>
