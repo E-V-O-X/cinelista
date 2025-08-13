@@ -245,7 +245,7 @@
       const editors = crew.filter(x=>x.job==='Editor');
 
       const peopleLine = (label, arr, role) =>
-        arr.length ? `<div class="muted"><b>${label}:</b> ${arr.slice(0,6).map(p=>`<button class="tag" data-person="${p.id}" data-role="${role}">${p.name}</button>`).join(' ')}</div>` : '';
+        arr.length ? `<div class="muted"><b>${label}:</b> ${arr.slice(0,6).map(p=>`<button class="tag person" data-person="${p.id}" data-role="${role}">${p.name}</button>`).join(' ')}</div>` : '';
 
       $('#mCrew').innerHTML = [
         peopleLine('Direção', dir, 'director'),
