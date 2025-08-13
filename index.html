@@ -283,6 +283,46 @@
     async function discoverByGenre(genreId){ const r = await fetch(API.tmdbDiscover(`with_genres=${genreId}`)); return r.json(); }
     async function moviesByPerson(personId){ const r = await fetch(API.tmdbPersonCredits(personId)); return r.json(); }
 
+    function getParams(){
+      const p = new URLSearchParams(location.search);
+      return {
+        genre: p.get('genre'),
+        person: p.get('person'),
+        role: p.get('role') // 'director' | 'writer' | 'editor'
+      };
+    }
+    
+    async function applyDeepLink(){
+      const { genre, person, role } = getParams();
+      if (genre) {
+        const data = await discoverByGenre(Number(genre));
+        renderResults(data.results, 'Gênero filtrado');
+        return true;
+      }
+      if (person) {
+        const data = await moviesByPerson(Number(person));
+        let list = [];
+        if (role) {
+          const crew = (data.crew||[]).filter(c=>{
+            if(role==='director') return c.job==='Director';
+            if(role==='writer') return ['Screenplay','Writer','Story','Adaptation'].includes(c.job);
+            if(role==='editor') return c.job==='Editor';
+            return false;
+          });
+          const uniq = new Map();
+          crew.forEach(c=>{ if(!uniq.has(c.id)) uniq.set(c.id, {id:c.id, title:c.title, poster_path:c.poster_path, release_date:c.release_date, vote_average:c.vote_average}); });
+          list = [...uniq.values()];
+          renderResults(list, `Pessoa filtrada`);
+          return true;
+        } else {
+          renderResults((data.cast||[]), 'Pessoa filtrada');
+          return true;
+        }
+      }
+      return false;
+    }
+
+
     // ===== Render helpers =====
     function renderResults(list, contextText=''){
       $('#results').innerHTML = (list||[]).map(card).join('');
@@ -376,8 +416,10 @@
     (async function(){
       bind();
       try{
-        const t = await trending();
-        renderResults(t.results, 'Tendências do dia');
+        if (!(await applyDeepLink())) {
+          const t = await trending();
+          renderResults(t.results, 'Tendências do dia');
+        }
       }catch{
         $('#results').innerHTML = '';
       }
