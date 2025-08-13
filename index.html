@@ -28,14 +28,22 @@
     button{cursor:pointer}
     .movies{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
     .card{position:relative;background:#0e1115;border:1px solid #1e2329;border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
-    .card.seen::after{content:"👁️ Visto";position:absolute;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-weight:700;letter-spacing:.3px}
-    .poster{aspect-ratio:2/3;background:#0b0d10;display:block;width:100%;object-fit:cover;cursor:pointer}
+    .poster{aspect-ratio:2/3;background:#0b0d10;display:block;width:100%;object-fit:cover;cursor:pointer;transition:filter .15s}
+    /* overlay apenas visual na THUMB (sem bloquear clique) */
+    .card.seen .poster{filter:brightness(.55) saturate(.85)}
     .body{padding:10px;display:grid;gap:8px}
     .title{font-weight:600;font-size:14px;cursor:pointer}
     .badge{font-size:12px;color:#a8b3bd}
     .actions{display:flex;gap:6px}
-    .pill{padding:6px 8px;border-radius:999px;border:1px solid #2a323c;background:#0f1317;font-size:12px}
+    .pill{position:relative;padding:6px 8px;border-radius:999px;border:1px solid #2a323c;background:#0f1317;font-size:12px}
     .ok{border-color:#265749}.warn{border-color:#60462a}
+    /* estado “já está na lista” = botão ON com ícone de menos */
+    .pill.on{opacity:.7}
+    .pill.on::after{
+      content:'−'; position:absolute; top:-6px; right:-6px; width:18px; height:18px;
+      border-radius:50%; background:#2a1517; border:1px solid #a33; color:#fff;
+      font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center; pointer-events:none;
+    }
     footer{padding:32px 0;color:#74808c}
 
     /* Botões do modal mais legíveis */
@@ -44,20 +52,25 @@
     .btn-secondary{background:#0f1317}
     .btn-danger{border-color:#a33;background:#2a1517}
 
-    /* Modal (dialog) */
-    dialog{border:1px solid #2a323c;border-radius:14px;max-width:720px;width:calc(100% - 24px);background:#0e1115;color:var(--text)}
+    /* Modal */
+    dialog{border:1px solid #2a323c;border-radius:14px;max-width:820px;width:calc(100% - 24px);background:#0e1115;color:var(--text)}
     dialog::backdrop{background:rgba(0,0,0,.6)}
     .modal-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #1e2329}
     .modal-body{display:grid;gap:12px;padding:14px}
     .muted{color:var(--muted)}
-    .tag{display:inline-block;padding:4px 8px;border:1px solid #2a323c;border-radius:999px;margin-right:6px;font-size:12px}
+    .tag{display:inline-block;padding:4px 8px;border:1px solid #2a323c;border-radius:999px;margin:0 6px 6px 0;font-size:12px;cursor:pointer}
+    .tag:hover{filter:brightness(1.1)}
 
     /* Estrelas (0.5) */
-    .stars{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+    .stars{display:inline-flex;gap:6px;align-items:center}
     .star{font-size:22px;line-height:1;user-select:none;color:var(--baseStar);cursor:pointer;transition:transform .05s}
     .star.on{color:var(--accent)}
     .star.half{background:linear-gradient(90deg,var(--accent) 50%, var(--baseStar) 50%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
     .star:hover{transform:scale(1.1)}
+    .stars, .star { cursor: pointer; } /* mãozinha */
+    .pill.tiny{padding:4px 8px;font-size:11px}
+    .link{cursor:pointer}
+    .context{margin-top:6px}
   </style>
 </head>
 <body>
@@ -82,7 +95,7 @@
         <button id="btnSearch">Buscar</button>
         <button id="btnPopular" title="Tendências do dia">Tendências</button>
       </div>
-      <div class="muted">Dados: TMDB.</div>
+      <div id="context" class="muted context">Dados: TMDB.</div>
     </section>
 
     <section id="results" class="movies"></section>
@@ -103,31 +116,37 @@
     </div>
     <div class="modal-body">
       <div class="row">
-        <img id="mPoster" alt="" style="width:160px;height:auto;border-radius:10px;object-fit:cover">
-        <div>
+        <img id="mPoster" alt="" style="width:180px;height:auto;border-radius:10px;object-fit:cover">
+        <div style="flex:1">
           <div id="mMeta" class="muted"></div>
-          <div id="mGenres" style="margin-top:6px"></div>
-          <div style="margin-top:10px">
+          <div id="mGenres" style="margin-top:8px"></div>
+
+          <div style="margin-top:10px" id="mCrew"></div>
+
+          <div style="margin-top:12px">
             <div class="muted" style="margin-bottom:4px">Sua nota</div>
             <div id="mStars" class="stars"></div>
             <button id="mZero" class="btn btn-danger" style="margin-left:8px">Zerar nota</button>
           </div>
         </div>
       </div>
-      <div id="mOverview"></div>
+      <div id="mOverview" style="margin-top:8px"></div>
     </div>
   </dialog>
 
   <script>
-    // ====== Endpoints ======
+    // ===== Endpoints =====
     const API = {
       tmdbSearch: (q) => `/api/tmdb/search?q=${encodeURIComponent(q)}`,
       tmdbTrending: () => `/api/tmdb/trending`,
       tmdbMovie: (id) => `/api/tmdb/movie?id=${id}`,
+      tmdbCredits: (id) => `/api/tmdb/credits?id=${id}`,
+      tmdbDiscover: (params) => `/api/tmdb/discover?${params}`,          // ex.: with_genres=12
+      tmdbPersonCredits: (id) => `/api/tmdb/person_credits?id=${id}`,     // filmes de uma pessoa
     };
     const IMG = (p)=> p ? `https://image.tmdb.org/t/p/w342${p}` : "";
 
-    // ====== Store local ======
+    // ===== Store =====
     const STORE_KEY = 'cinelista-store-v1';
     const $ = (s)=>document.querySelector(s);
 
@@ -142,17 +161,41 @@
     function setStore(s){ localStorage.setItem(STORE_KEY, JSON.stringify(s)); }
     function hasItem(s, status, id){ return s[status].some(x=>x.id===id); }
     function pushItem(s, status, item){ if(!hasItem(s,status,item.id)) s[status].unshift(item); }
+    function removeItem(s, status, id){ s[status] = s[status].filter(x=>x.id!==id); }
     function setRating(id, val){ const s=getStore(); if(val>0) s.ratings[id]=val; else delete s.ratings[id]; setStore(s); }
     function isWatched(id){ return getStore().watched.some(x=>x.id===id); }
 
-    // ====== UI helpers ======
+    // ===== Helpers UI =====
     function toast(msg){
       const t = document.createElement('div'); t.textContent = msg;
       Object.assign(t.style,{position:'fixed',bottom:'18px',left:'50%',transform:'translateX(-50%)',background:'#111',color:'#fff',padding:'10px 14px',border:'1px solid #2c333a',borderRadius:'10px',zIndex:9999});
       document.body.appendChild(t); setTimeout(()=>t.remove(),1600);
     }
 
-    // ====== Estrelas (0.5) ======
+    // Estado visual dos botões/overlay por card
+    function applyStateToCard(cardEl, id){
+      const s = getStore();
+      const map = {
+        fav: hasItem(s,'fav',id),
+        watched: hasItem(s,'watched',id),
+        watchlist: hasItem(s,'watchlist',id),
+      };
+      cardEl.classList.toggle('seen', map.watched);
+      // marcar botões
+      cardEl.querySelectorAll('.actions .pill').forEach(btn=>{
+        const act = btn.dataset.action;
+        btn.classList.toggle('on', !!map[act]);
+      });
+    }
+
+    function processRenderedCards(){
+      document.querySelectorAll('.card').forEach(c=>{
+        const id = Number(c.dataset.id);
+        applyStateToCard(c, id);
+      });
+    }
+
+    // ===== Estrelas (0.5) =====
     function renderStars(el, movieId){
       const cur = Number(getStore().ratings[movieId] ?? 0);
       el.innerHTML = '';
@@ -173,32 +216,36 @@
       }
     }
 
-    // ====== Cards ======
+    // ===== Card HTML =====
     function card(m){
       const y = m.release_date ? m.release_date.split('-')[0] : '';
-      const seenClass = isWatched(m.id) ? 'seen' : '';
       return `
-        <div class="card ${seenClass}" data-id="${m.id}">
+        <div class="card" data-id="${m.id}">
           <img class="poster" loading="lazy" src="${IMG(m.poster_path)}" alt="${m.title}">
           <div class="body">
             <div class="title" data-open="1">${m.title}</div>
-            <div class="badge">${y} • ⭐ ${m.vote_average?.toFixed?.(1) ?? '—'}</div>
+            <div class="badge">${y || ''} ${y?'•':''} ⭐ ${m.vote_average?.toFixed?.(1) ?? '—'}</div>
             <div class="actions">
-              <button class="pill ok" data-action="fav">⭐</button>
-              <button class="pill warn" data-action="watched">👁️</button>
-              <button class="pill" data-action="watchlist">➕</button>
+              <button class="pill ok" data-action="fav" title="Favoritos">⭐</button>
+              <button class="pill warn" data-action="watched" title="Assistidos">👁️</button>
+              <button class="pill" data-action="watchlist" title="Watchlist">➕</button>
             </div>
           </div>
         </div>`;
     }
 
-    // ====== Modal ======
+    // ===== Modal =====
     let currentMovieId = null;
     async function showDetails(id){
       currentMovieId = id;
-      const r = await fetch(API.tmdbMovie(id));
-      if(!r.ok) { toast('Erro ao carregar detalhes'); return; }
-      const m = await r.json();
+      const [mRes, cRes] = await Promise.all([
+        fetch(API.tmdbMovie(id)),
+        fetch(API.tmdbCredits(id))
+      ]);
+      if(!mRes.ok) { toast('Erro ao carregar detalhes'); return; }
+      const m = await mRes.json();
+      const credits = cRes.ok ? await cRes.json() : {crew:[]};
+
       $('#mTitle').textContent = m.title || m.name || 'Filme';
       $('#mPoster').src = IMG(m.poster_path);
       const year = m.release_date ? m.release_date.split('-')[0] : '';
@@ -206,27 +253,56 @@
       const rating = (m.vote_average?.toFixed?.(1) ?? '—');
       $('#mMeta').textContent = [year, runtime, `⭐ ${rating}`].filter(Boolean).join(' • ');
       $('#mOverview').textContent = m.overview || 'Sem sinopse.';
-      $('#mGenres').innerHTML = (m.genres||[]).map(g=>`<span class="tag">${g.name}</span>`).join('');
+
+      // gêneros (tags clicáveis)
+      $('#mGenres').innerHTML = (m.genres||[]).map(g=>`<span class="tag" data-genre="${g.id}" title="Filtrar por ${g.name}">${g.name}</span>`).join('');
+
+      // crew: Diretor / Roteiristas / Editores (clicáveis)
+      const crew = credits.crew || [];
+      const dir = crew.filter(x=>x.job==='Director');
+      const writers = crew.filter(x=>['Screenplay','Writer','Story','Adaptation'].includes(x.job));
+      const editors = crew.filter(x=>x.job==='Editor');
+
+      function peopleLine(label, arr, role){
+        if(!arr.length) return '';
+        return `<div class="muted"><b>${label}:</b> ${arr.slice(0,6).map(p=>`<button class="tag link" data-person="${p.id}" data-role="${role}" title="Filtrar por ${p.name}">${p.name}</button>`).join(' ')}</div>`;
+      }
+      $('#mCrew').innerHTML = [
+        peopleLine('Direção', dir, 'director'),
+        peopleLine('Roteiro', writers, 'writer'),
+        peopleLine('Edição', editors, 'editor')
+      ].join('');
+
       renderStars(document.getElementById('mStars'), id);
       $('#movieModal').showModal();
     }
 
-    // ====== Network ======
+    // ===== Network =====
     async function searchMovies(q){ const r = await fetch(API.tmdbSearch(q)); return r.json(); }
     async function trending(){ const r = await fetch(API.tmdbTrending()); return r.json(); }
+    async function discoverByGenre(genreId){ const r = await fetch(API.tmdbDiscover(`with_genres=${genreId}`)); return r.json(); }
+    async function moviesByPerson(personId){ const r = await fetch(API.tmdbPersonCredits(personId)); return r.json(); }
 
-    // ====== Bindings ======
+    // ===== Render helpers =====
+    function renderResults(list, contextText=''){
+      $('#results').innerHTML = (list||[]).map(card).join('');
+      processRenderedCards();
+      $('#context').textContent = contextText || 'Dados: TMDB via /api (chave protegida na Vercel).';
+      window.scrollTo({top:0, behavior:'smooth'});
+    }
+
+    // ===== Bindings =====
     function bind(){
       $('#btnSearch').onclick = async ()=>{
         const q = $('#q').value.trim(); if(!q) return;
         const data = await searchMovies(q);
-        $('#results').innerHTML = (data.results||[]).map(card).join('');
+        renderResults(data.results, `Resultados para “${q}”`);
       };
       $('#q').addEventListener('keydown', (e)=>{ if(e.key==='Enter') $('#btnSearch').click(); });
 
       $('#btnPopular').onclick = async ()=>{
         const t = await trending();
-        $('#results').innerHTML = (t.results||[]).map(card).join('');
+        renderResults(t.results, 'Tendências do dia');
       };
 
       // Ações nas cards
@@ -237,28 +313,71 @@
         // abrir detalhes
         if(e.target.matches('.poster,[data-open]')){ showDetails(id); return; }
 
-        // salvar listas
+        // toggle em listas
         const btn = e.target.closest('button'); if(!btn) return;
         const act = btn.dataset.action; if(!act) return;
-        const meta = await (await fetch(API.tmdbMovie(id))).json();
+
         const s = getStore();
-        pushItem(s, act, { id, status: act, title: meta.title, poster_path: meta.poster_path });
-        setStore(s);
-        if(act==='watched') card.classList.add('seen'); // overlay imediato
-        toast('Salvo! Vá em “Listas” para ver.');
+        const inList = hasItem(s, act, id);
+        if(inList){
+          removeItem(s, act, id);
+          setStore(s);
+          applyStateToCard(card, id);
+          toast('Removido.');
+        }else{
+          // pegar meta para salvar título/poster
+          const meta = await (await fetch(API.tmdbMovie(id))).json();
+          pushItem(s, act, { id, status: act, title: meta.title, poster_path: meta.poster_path });
+          setStore(s);
+          applyStateToCard(card, id);
+          toast('Adicionado!');
+        }
       });
 
       // Modal controls
       $('#mClose').onclick = ()=> document.getElementById('movieModal').close();
       $('#mZero').onclick = ()=>{ if(currentMovieId){ setRating(currentMovieId, 0); renderStars(document.getElementById('mStars'), currentMovieId); } };
+
+      // Filtros clicáveis dentro do modal
+      document.getElementById('movieModal').addEventListener('click', async (e)=>{
+        // por gênero
+        if(e.target.dataset.genre){
+          const gid = Number(e.target.dataset.genre);
+          const name = e.target.textContent.trim();
+          const data = await discoverByGenre(gid);
+          renderResults(data.results, `Gênero: ${name}`);
+          document.getElementById('movieModal').close();
+          return;
+        }
+        // por pessoa/role
+        if(e.target.dataset.person){
+          const pid = Number(e.target.dataset.person);
+          const role = e.target.dataset.role; // director | writer | editor
+          const name = e.target.textContent.trim();
+          const data = await moviesByPerson(pid); // {cast, crew}
+          const crew = (data.crew||[]).filter(c=>{
+            if(role==='director') return c.job==='Director';
+            if(role==='writer') return ['Screenplay','Writer','Story','Adaptation'].includes(c.job);
+            if(role==='editor') return c.job==='Editor';
+            return false;
+          });
+          // mapear para shape de movie
+          const uniq = new Map();
+          crew.forEach(c=>{
+            if(!uniq.has(c.id)) uniq.set(c.id, {id:c.id, title:c.title, poster_path:c.poster_path, release_date:c.release_date, vote_average:c.vote_average});
+          });
+          renderResults([...uniq.values()], `${role==='director'?'Diretor':role==='writer'?'Roteirista':'Editor'}: ${name}`);
+          document.getElementById('movieModal').close();
+        }
+      });
     }
 
-    // ====== Init ======
+    // ===== Init =====
     (async function(){
       bind();
       try{
         const t = await trending();
-        $('#results').innerHTML = (t.results||[]).map(card).join('');
+        renderResults(t.results, 'Tendências do dia');
       }catch{
         $('#results').innerHTML = '';
       }
