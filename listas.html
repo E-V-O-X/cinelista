@@ -32,7 +32,6 @@
     .item img{width:44px;height:66px;border-radius:8px;object-fit:cover;cursor:pointer}
     .title{font-weight:600;cursor:pointer}
     .muted{color:var(--muted)}
-    /* Botões mais legíveis */
     .btn{padding:8px 12px;border-radius:10px;border:1px solid #2a323c;background:#14181c;color:var(--text);font-weight:600;cursor:pointer}
     .btn:hover{filter:brightness(1.1)}
     .btn-danger{border-color:#a33;background:#2a1517}
@@ -40,11 +39,12 @@
     .btn-sm{padding:6px 10px;font-size:12px}
     footer{padding:32px 0;color:#74808c}
 
-    dialog{border:1px solid #2a323c;border-radius:14px;max-width:720px;width:calc(100% - 24px);background:#0e1115;color:var(--text)}
+    dialog{border:1px solid #2a323c;border-radius:14px;max-width:820px;width:calc(100% - 24px);background:#0e1115;color:var(--text)}
     dialog::backdrop{background:rgba(0,0,0,.6)}
     .modal-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #1e2329}
     .modal-body{display:grid;gap:12px;padding:14px}
-    .tag{display:inline-block;padding:4px 8px;border:1px solid #2a323c;border-radius:999px;margin-right:6px;font-size:12px}
+    .tag{display:inline-block;padding:4px 8px;border:1px solid #2a323c;border-radius:999px;margin:0 6px 6px 0;font-size:12px;cursor:pointer}
+    .tag:hover{filter:brightness(1.1)}
 
     /* Estrelas (0.5) */
     .stars{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
@@ -90,7 +90,7 @@
     </div>
   </footer>
 
-  <!-- Modal (detalhes + estrelas) -->
+  <!-- Modal (detalhes + estrelas + filtros) -->
   <dialog id="movieModal">
     <div class="modal-head">
       <strong id="mTitle">Título</strong>
@@ -98,10 +98,11 @@
     </div>
     <div class="modal-body">
       <div class="row">
-        <img id="mPoster" alt="" style="width:160px;height:auto;border-radius:10px;object-fit:cover">
+        <img id="mPoster" alt="" style="width:180px;height:auto;border-radius:10px;object-fit:cover">
         <div>
           <div id="mMeta" class="muted"></div>
           <div id="mGenres" style="margin-top:6px"></div>
+          <div id="mCrew" style="margin-top:8px"></div>
           <div style="margin-top:10px">
             <div class="muted" style="margin-bottom:4px">Sua nota</div>
             <div id="mStars" class="stars"></div>
@@ -114,7 +115,10 @@
   </dialog>
 
   <script>
-    const API = { tmdbMovie: (id) => `/api/tmdb/movie?id=${id}` };
+    const API = {
+      tmdbMovie: (id) => `/api/tmdb/movie?id=${id}`,
+      tmdbCredits: (id) => `/api/tmdb/credits?id=${id}`,           // NOVO
+    };
     const IMG = (p)=> p ? `https://image.tmdb.org/t/p/w342${p}` : "";
     const STORE_KEY = 'cinelista-store-v1';
     const $ = s => document.querySelector(s);
@@ -189,17 +193,20 @@
         const leftHalf = (e.clientX - rect.left) < rect.width/2;
         const val = leftHalf ? (i - 0.5) : i;
         setRating(id, val);
-        render(currentTab);                // <<< atualiza a lista imediatamente
+        render(currentTab);
         return;
       }
     });
 
-    // Modal de detalhes + estrelas (espelha nota e re-renderiza lista)
+    // Modal (detalhes + créditos + filtros via redirecionamento)
     let currentModalId = null;
     async function showDetails(id){
       currentModalId = id;
-      const r = await fetch(API.tmdbMovie(id)); if(!r.ok) return;
-      const m = await r.json();
+      const [r1, r2] = await Promise.all([ fetch(API.tmdbMovie(id)), fetch(API.tmdbCredits(id)) ]);
+      if(!r1.ok) return;
+      const m = await r1.json();
+      const credits = r2.ok ? await r2.json() : { crew:[] };
+
       $('#mTitle').textContent = m.title || m.name || 'Filme';
       $('#mPoster').src = IMG(m.poster_path);
       const year = m.release_date ? m.release_date.split('-')[0] : '';
@@ -207,8 +214,26 @@
       const rating = (m.vote_average?.toFixed?.(1) ?? '—');
       $('#mMeta').textContent = [year, runtime, `⭐ ${rating}`].filter(Boolean).join(' • ');
       $('#mOverview').textContent = m.overview || 'Sem sinopse.';
-      $('#mGenres').innerHTML = (m.genres||[]).map(g=>`<span class="tag">${g.name}</span>`).join('');
 
+      // gêneros clicáveis → redireciona para index com ?genre=
+      $('#mGenres').innerHTML = (m.genres||[]).map(g=>`<span class="tag" data-genre="${g.id}">${g.name}</span>`).join('');
+
+      // crew (direção/roteiro/edição) → redireciona para index com ?person=&role=
+      const crew = credits.crew || [];
+      const dir = crew.filter(x=>x.job==='Director');
+      const writers = crew.filter(x=>['Screenplay','Writer','Story','Adaptation'].includes(x.job));
+      const editors = crew.filter(x=>x.job==='Editor');
+
+      const peopleLine = (label, arr, role) =>
+        arr.length ? `<div class="muted"><b>${label}:</b> ${arr.slice(0,6).map(p=>`<button class="tag" data-person="${p.id}" data-role="${role}">${p.name}</button>`).join(' ')}</div>` : '';
+
+      $('#mCrew').innerHTML = [
+        peopleLine('Direção', dir, 'director'),
+        peopleLine('Roteiro', writers, 'writer'),
+        peopleLine('Edição', editors, 'editor')
+      ].join('');
+
+      // estrelas no modal
       const wrap = document.getElementById('mStars');
       wrap.innerHTML = '';
       const cur = Number(getStore().ratings[id] ?? 0);
@@ -223,13 +248,25 @@
           const val = leftHalf ? (i - 0.5) : i;
           setRating(id, val);
           showDetails(id); // re-render modal
-          render(currentTab); // e atualiza a lista sem recarregar
+          render(currentTab); // atualiza lista sem recarregar
         };
         wrap.appendChild(s);
       }
+
       document.getElementById('movieModal').showModal();
     }
     document.getElementById('mClose').onclick = ()=> document.getElementById('movieModal').close();
+    document.getElementById('movieModal').addEventListener('click', (e)=>{
+      if(e.target.dataset.genre){
+        const gid = e.target.dataset.genre;
+        location.href = `/?genre=${gid}`;  // abre index filtrado
+      }
+      if(e.target.dataset.person){
+        const pid = e.target.dataset.person;
+        const role = e.target.dataset.role;
+        location.href = `/?person=${pid}&role=${role}`; // abre index filtrado
+      }
+    });
     document.getElementById('mZero').onclick = ()=>{
       if(currentModalId){ setRating(currentModalId, 0); showDetails(currentModalId); render(currentTab); }
     };
