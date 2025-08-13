@@ -1,10 +1,17 @@
 const db = require("./_lib/db");
 const { getUserFromReq, enforceOrigin } = require("./_lib/auth");
 
+function readJson(req) {
+  try {
+    if (typeof req.body === "string") return JSON.parse(req.body || "{}");
+    if (typeof req.body === "object" && req.body !== null) return req.body;
+  } catch {}
+  return {};
+}
+
 module.exports = async (req, res) => {
-  const me = getUserFromReq(req);
+  // Preflight CORS
   if (req.method === "OPTIONS") {
-    // habilita CORS básico para o preflight
     const origin = req.headers.origin || "";
     if (origin) {
       res.setHeader("Access-Control-Allow-Origin", origin);
@@ -15,6 +22,7 @@ module.exports = async (req, res) => {
     return res.status(204).end();
   }
 
+  const me = getUserFromReq(req);
   if (!me) return res.status(401).json({ error: "unauthorized" });
 
   if (req.method === "GET") {
@@ -25,8 +33,12 @@ module.exports = async (req, res) => {
 
   if (req.method === "PUT") {
     if (!enforceOrigin(req, res)) return;
-    const { data } = JSON.parse(req.body || "{}");
-    if (typeof data !== "object" || data === null) return res.status(400).json({ error: "invalid data" });
+
+    const body = readJson(req);
+    const data = body?.data;
+    if (typeof data !== "object" || data === null) {
+      return res.status(400).json({ error: "invalid data" });
+    }
 
     await db.query(
       `insert into lists (user_id, data, updated_at)
@@ -34,6 +46,7 @@ module.exports = async (req, res) => {
        on conflict (user_id) do update set data=excluded.data, updated_at=now()`,
       [me.id, data]
     );
+
     return res.status(200).json({ ok: true });
   }
 
