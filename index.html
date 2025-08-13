@@ -13,7 +13,10 @@
                  connect-src 'self'">
 
   <style>
-    :root{--bg:#0b0d10;--panel:#13161a;--muted:#8fa1b3;--accent:#36d399;--danger:#e25555;--text:#e6edf3;--baseStar:#3a4755}
+    :root{
+      --bg:#0b0d10;--panel:#13161a;--muted:#8fa1b3;--accent:#36d399;--danger:#e25555;--text:#e6edf3;--baseStar:#3a4755;
+      --favBorder:#d8b40066;
+    }
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial}
     header{position:sticky;top:0;z-index:10;background:rgba(11,13,16,.9);backdrop-filter:saturate(1.4) blur(6px);border-bottom:1px solid #1e2329}
@@ -27,50 +30,59 @@
     input,button{border:1px solid #26303a;background:#0e1115;color:var(--text);padding:10px 12px;border-radius:10px}
     button{cursor:pointer}
     .movies{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
-    .card{position:relative;background:#0e1115;border:1px solid #1e2329;border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
-    .poster{aspect-ratio:2/3;background:#0b0d10;display:block;width:100%;object-fit:cover;cursor:pointer;transition:filter .15s}
-    /* overlay apenas visual na THUMB (sem bloquear clique) */
-    .card.seen .poster{filter:brightness(.55) saturate(.85)}
+
+    .card{background:#0e1115;border:1px solid #1e2329;border-radius:12px;overflow:hidden}
+    .thumb{position:relative}
+    .poster{aspect-ratio:2/3;background:#0b0d10;display:block;width:100%;object-fit:cover;cursor:pointer;transition:filter .15s, outline-color .15s}
+    .seen .poster{filter:brightness(.55) saturate(.85)}
+    .fav .poster{outline:3px solid var(--favBorder)}
+    .seen-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+      color:#ffffffd0;font-weight:700;letter-spacing:.3px;text-shadow:0 1px 2px rgba(0,0,0,.6);pointer-events:none;opacity:0}
+    .seen .seen-text{opacity:1}
+
     .body{padding:10px;display:grid;gap:8px}
     .title{font-weight:600;font-size:14px;cursor:pointer}
     .badge{font-size:12px;color:#a8b3bd}
     .actions{display:flex;gap:6px}
     .pill{position:relative;padding:6px 8px;border-radius:999px;border:1px solid #2a323c;background:#0f1317;font-size:12px}
     .ok{border-color:#265749}.warn{border-color:#60462a}
-    /* estado “já está na lista” = botão ON com ícone de menos */
     .pill.on{opacity:.7}
     .pill.on::after{
       content:'−'; position:absolute; top:-6px; right:-6px; width:18px; height:18px;
       border-radius:50%; background:#2a1517; border:1px solid #a33; color:#fff;
       font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center; pointer-events:none;
     }
+
+    /* pager */
+    .pager{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;margin-top:10px}
+    .page-btn{padding:8px 10px;border:1px solid #2a323c;background:#0f1317;border-radius:10px;color:var(--text);cursor:pointer}
+    .page-btn[disabled]{opacity:.5;cursor:not-allowed}
+    .page-btn.active{border-color:#36d399}
+
     footer{padding:32px 0;color:#74808c}
 
-    /* Botões do modal mais legíveis */
+    /* Modal */
     .btn{padding:8px 12px;border-radius:10px;border:1px solid #2a323c;background:#14181c;color:var(--text);font-weight:600;cursor:pointer}
     .btn:hover{filter:brightness(1.1)}
     .btn-secondary{background:#0f1317}
     .btn-danger{border-color:#a33;background:#2a1517}
 
-    /* Modal */
-    dialog{border:1px solid #2a323c;border-radius:14px;max-width:820px;width:calc(100% - 24px);background:#0e1115;color:var(--text)}
+    dialog{border:1px solid #2a323c;border-radius:14px;max-width:860px;width:calc(100% - 24px);background:#0e1115;color:var(--text)}
     dialog::backdrop{background:rgba(0,0,0,.6)}
     .modal-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #1e2329}
     .modal-body{display:grid;gap:12px;padding:14px}
     .muted{color:var(--muted)}
-    .tag{display:inline-block;padding:4px 8px;border:1px solid #2a323c;border-radius:999px;margin:0 6px 6px 0;font-size:12px;cursor:pointer}
+    .tag{display:inline-block;padding:6px 10px;border:1px solid #2a323c;border-radius:999px;margin:0 6px 6px 0;font-size:12px;cursor:pointer}
     .tag:hover{filter:brightness(1.1)}
+    /* nomes de pessoas: fundo neutro + texto branco */
+    .tag.person{background:#14181c;color:#fff;border-color:#2a323c}
 
-    /* Estrelas (0.5) */
-    .stars{display:inline-flex;gap:6px;align-items:center}
-    .star{font-size:22px;line-height:1;user-select:none;color:var(--baseStar);cursor:pointer;transition:transform .05s}
+    /* Estrelas maiores (0.5) */
+    .stars{display:inline-flex;gap:8px;align-items:center;cursor:pointer}
+    .star{font-size:24px;line-height:1;user-select:none;color:var(--baseStar);cursor:pointer;transition:transform .05s}
     .star.on{color:var(--accent)}
     .star.half{background:linear-gradient(90deg,var(--accent) 50%, var(--baseStar) 50%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
     .star:hover{transform:scale(1.1)}
-    .stars, .star { cursor: pointer; } /* mãozinha */
-    .pill.tiny{padding:4px 8px;font-size:11px}
-    .link{cursor:pointer}
-    .context{margin-top:6px}
   </style>
 </head>
 <body>
@@ -95,10 +107,11 @@
         <button id="btnSearch">Buscar</button>
         <button id="btnPopular" title="Tendências do dia">Tendências</button>
       </div>
-      <div id="context" class="muted context">Dados: TMDB.</div>
+      <div id="context" class="muted" style="margin-top:6px">Dados: TMDB.</div>
     </section>
 
     <section id="results" class="movies"></section>
+    <div id="pager" class="pager"></div>
   </main>
 
   <footer class="wrap" style="margin-top:20px">
@@ -115,13 +128,13 @@
       <button id="mClose" class="btn btn-secondary">Fechar</button>
     </div>
     <div class="modal-body">
-      <div class="row">
-        <img id="mPoster" alt="" style="width:180px;height:auto;border-radius:10px;object-fit:cover">
+      <div class="row" style="gap:14px;align-items:flex-start">
+        <img id="mPoster" alt="" style="width:200px;height:auto;border-radius:10px;object-fit:cover">
         <div style="flex:1">
           <div id="mMeta" class="muted"></div>
           <div id="mGenres" style="margin-top:8px"></div>
 
-          <div style="margin-top:10px" id="mCrew"></div>
+          <div id="mCrew" style="margin-top:10px"></div>
 
           <div style="margin-top:12px">
             <div class="muted" style="margin-bottom:4px">Sua nota</div>
@@ -135,64 +148,52 @@
   </dialog>
 
   <script>
-    // ===== Endpoints =====
+    // ===== Config / State =====
+    const UI_PAGE_SIZE = 24;                   // 24 por página (UI)
+    const TMDB_PAGE_SIZE = 20;                 // TMDB fixa em 20
     const API = {
-      tmdbSearch: (q) => `/api/tmdb/search?q=${encodeURIComponent(q)}`,
-      tmdbTrending: () => `/api/tmdb/trending`,
+      tmdbSearch: (q, page=1) => `/api/tmdb/search?q=${encodeURIComponent(q)}&page=${page}`,
+      tmdbTrending: (page=1) => `/api/tmdb/trending?page=${page}`,
       tmdbMovie: (id) => `/api/tmdb/movie?id=${id}`,
       tmdbCredits: (id) => `/api/tmdb/credits?id=${id}`,
-      tmdbDiscover: (params) => `/api/tmdb/discover?${params}`,          // ex.: with_genres=12
-      tmdbPersonCredits: (id) => `/api/tmdb/person_credits?id=${id}`,     // filmes de uma pessoa
+      tmdbDiscover: (params) => `/api/tmdb/discover?${params}`,          // inclui page na string
+      tmdbPersonCredits: (id) => `/api/tmdb/person_credits?id=${id}`,
     };
     const IMG = (p)=> p ? `https://image.tmdb.org/t/p/w342${p}` : "";
 
-    // ===== Store =====
     const STORE_KEY = 'cinelista-store-v1';
     const $ = (s)=>document.querySelector(s);
 
     function baseStore(){ return {fav:[],watched:[],watchlist:[],ratings:{}}; }
-    function getStore(){
-      try{
-        const s = JSON.parse(localStorage.getItem(STORE_KEY)) || baseStore();
-        if(!s.ratings) s.ratings = {};
-        return s;
-      }catch{ return baseStore(); }
-    }
+    function getStore(){ try{ const s=JSON.parse(localStorage.getItem(STORE_KEY))||baseStore(); if(!s.ratings) s.ratings={}; return s; }catch{ return baseStore(); } }
     function setStore(s){ localStorage.setItem(STORE_KEY, JSON.stringify(s)); }
     function hasItem(s, status, id){ return s[status].some(x=>x.id===id); }
     function pushItem(s, status, item){ if(!hasItem(s,status,item.id)) s[status].unshift(item); }
     function removeItem(s, status, id){ s[status] = s[status].filter(x=>x.id!==id); }
     function setRating(id, val){ const s=getStore(); if(val>0) s.ratings[id]=val; else delete s.ratings[id]; setStore(s); }
     function isWatched(id){ return getStore().watched.some(x=>x.id===id); }
+    function isFav(id){ return getStore().fav.some(x=>x.id===id); }
 
-    // ===== Helpers UI =====
+    // ===== UI helpers =====
     function toast(msg){
       const t = document.createElement('div'); t.textContent = msg;
-      Object.assign(t.style,{position:'fixed',bottom:'18px',left:'50%',transform:'translateX(-50%)',background:'#111',color:'#fff',padding:'10px 14px',border:'1px solid #2c333a',borderRadius:'10px',zIndex:9999});
+      Object.assign(t.style,{position:'fixed',bottom:'18px',left:'50%',transform:'translateX(-50%)',background:'#111',color:'#fff',padding:'10px 14px',border:'1px solid #2a333a',borderRadius:'10px',zIndex:9999});
       document.body.appendChild(t); setTimeout(()=>t.remove(),1600);
     }
 
-    // Estado visual dos botões/overlay por card
+    // aplicar estado (seen/fav) e toggles
     function applyStateToCard(cardEl, id){
       const s = getStore();
-      const map = {
-        fav: hasItem(s,'fav',id),
-        watched: hasItem(s,'watched',id),
-        watchlist: hasItem(s,'watchlist',id),
-      };
-      cardEl.classList.toggle('seen', map.watched);
-      // marcar botões
+      cardEl.classList.toggle('seen', s.watched.some(x=>x.id===id));
+      cardEl.classList.toggle('fav', s.fav.some(x=>x.id===id));
       cardEl.querySelectorAll('.actions .pill').forEach(btn=>{
         const act = btn.dataset.action;
-        btn.classList.toggle('on', !!map[act]);
+        const on = s[act].some(x=>x.id===id);
+        btn.classList.toggle('on', on);
       });
     }
-
     function processRenderedCards(){
-      document.querySelectorAll('.card').forEach(c=>{
-        const id = Number(c.dataset.id);
-        applyStateToCard(c, id);
-      });
+      document.querySelectorAll('.card').forEach(c=>applyStateToCard(c, Number(c.dataset.id)));
     }
 
     // ===== Estrelas (0.5) =====
@@ -221,7 +222,10 @@
       const y = m.release_date ? m.release_date.split('-')[0] : '';
       return `
         <div class="card" data-id="${m.id}">
-          <img class="poster" loading="lazy" src="${IMG(m.poster_path)}" alt="${m.title}">
+          <div class="thumb">
+            <img class="poster" loading="lazy" src="${IMG(m.poster_path)}" alt="${m.title}">
+            <span class="seen-text">Visto</span>
+          </div>
           <div class="body">
             <div class="title" data-open="1">${m.title}</div>
             <div class="badge">${y || ''} ${y?'•':''} ⭐ ${m.vote_average?.toFixed?.(1) ?? '—'}</div>
@@ -254,19 +258,16 @@
       $('#mMeta').textContent = [year, runtime, `⭐ ${rating}`].filter(Boolean).join(' • ');
       $('#mOverview').textContent = m.overview || 'Sem sinopse.';
 
-      // gêneros (tags clicáveis)
+      // gêneros (clicáveis)
       $('#mGenres').innerHTML = (m.genres||[]).map(g=>`<span class="tag" data-genre="${g.id}" title="Filtrar por ${g.name}">${g.name}</span>`).join('');
 
-      // crew: Diretor / Roteiristas / Editores (clicáveis)
+      // crew (clicável)
       const crew = credits.crew || [];
       const dir = crew.filter(x=>x.job==='Director');
       const writers = crew.filter(x=>['Screenplay','Writer','Story','Adaptation'].includes(x.job));
       const editors = crew.filter(x=>x.job==='Editor');
-
-      function peopleLine(label, arr, role){
-        if(!arr.length) return '';
-        return `<div class="muted"><b>${label}:</b> ${arr.slice(0,6).map(p=>`<button class="tag link" data-person="${p.id}" data-role="${role}" title="Filtrar por ${p.name}">${p.name}</button>`).join(' ')}</div>`;
-      }
+      const peopleLine = (label, arr, role) =>
+        arr.length ? `<div class="muted"><b>${label}:</b> ${arr.slice(0,8).map(p=>`<button class="tag person" data-person="${p.id}" data-role="${role}" title="Filtrar por ${p.name}">${p.name}</button>`).join(' ')}</div>` : '';
       $('#mCrew').innerHTML = [
         peopleLine('Direção', dir, 'director'),
         peopleLine('Roteiro', writers, 'writer'),
@@ -277,53 +278,92 @@
       $('#movieModal').showModal();
     }
 
-    // ===== Network =====
-    async function searchMovies(q){ const r = await fetch(API.tmdbSearch(q)); return r.json(); }
-    async function trending(){ const r = await fetch(API.tmdbTrending()); return r.json(); }
-    async function discoverByGenre(genreId){ const r = await fetch(API.tmdbDiscover(`with_genres=${genreId}`)); return r.json(); }
-    async function moviesByPerson(personId){ const r = await fetch(API.tmdbPersonCredits(personId)); return r.json(); }
+    // ===== Pager UI =====
+    function renderPager(totalPages, currentPage, onGoPage){
+      const el = $('#pager'); el.innerHTML = '';
+      if(totalPages <= 1) return;
 
-    function getParams(){
-      const p = new URLSearchParams(location.search);
-      return {
-        genre: p.get('genre'),
-        person: p.get('person'),
-        role: p.get('role') // 'director' | 'writer' | 'editor'
+      const mk = (label, page, opts={})=>{
+        const b = document.createElement('button');
+        b.className = 'page-btn';
+        if(opts.active) b.classList.add('active');
+        if(opts.disabled) b.setAttribute('disabled','');
+        b.textContent = label;
+        b.onclick = ()=> onGoPage(page);
+        return b;
       };
-    }
-    
-    async function applyDeepLink(){
-      const { genre, person, role } = getParams();
-      if (genre) {
-        const data = await discoverByGenre(Number(genre));
-        renderResults(data.results, 'Gênero filtrado');
-        return true;
-      }
-      if (person) {
-        const data = await moviesByPerson(Number(person));
-        let list = [];
-        if (role) {
-          const crew = (data.crew||[]).filter(c=>{
-            if(role==='director') return c.job==='Director';
-            if(role==='writer') return ['Screenplay','Writer','Story','Adaptation'].includes(c.job);
-            if(role==='editor') return c.job==='Editor';
-            return false;
-          });
-          const uniq = new Map();
-          crew.forEach(c=>{ if(!uniq.has(c.id)) uniq.set(c.id, {id:c.id, title:c.title, poster_path:c.poster_path, release_date:c.release_date, vote_average:c.vote_average}); });
-          list = [...uniq.values()];
-          renderResults(list, `Pessoa filtrada`);
-          return true;
-        } else {
-          renderResults((data.cast||[]), 'Pessoa filtrada');
-          return true;
-        }
-      }
-      return false;
+
+      el.appendChild(mk('«', 1, {disabled: currentPage===1}));
+      el.appendChild(mk('‹', Math.max(1,currentPage-1), {disabled: currentPage===1}));
+
+      // janela inteligente
+      const windowSize = 9;
+      let start = Math.max(1, currentPage - Math.floor(windowSize/2));
+      let end = Math.min(totalPages, start + windowSize - 1);
+      if(end - start + 1 < windowSize) start = Math.max(1, end - windowSize + 1);
+
+      if(start > 1){ el.appendChild(mk('1', 1)); if(start>2){ const d=document.createElement('span'); d.className='muted'; d.textContent='…'; el.appendChild(d); } }
+      for(let p=start;p<=end;p++) el.appendChild(mk(String(p), p, {active:p===currentPage}));
+      if(end < totalPages){ if(end<totalPages-1){ const d=document.createElement('span'); d.className='muted'; d.textContent='…'; el.appendChild(d); } el.appendChild(mk(String(totalPages), totalPages)); }
+
+      el.appendChild(mk('›', Math.min(totalPages,currentPage+1), {disabled: currentPage===totalPages}));
+      el.appendChild(mk('»', totalPages, {disabled: currentPage===totalPages}));
     }
 
+    // ===== Fetch helpers (24 por página na UI) =====
+    function tmdbPagesForUiPage(uiPage){
+      const startIdx = (uiPage-1)*UI_PAGE_SIZE;
+      const endIdxExclusive = uiPage*UI_PAGE_SIZE;
+      const firstPage = Math.floor(startIdx / TMDB_PAGE_SIZE) + 1;
+      const lastPage = Math.floor((endIdxExclusive-1) / TMDB_PAGE_SIZE) + 1;
+      const sliceStartInConcat = startIdx - (firstPage-1)*TMDB_PAGE_SIZE;
+      return { firstPage, lastPage, sliceStartInConcat, sliceEndInConcat: sliceStartInConcat + UI_PAGE_SIZE };
+    }
 
-    // ===== Render helpers =====
+    async function fetchSearchPaged(q, uiPage){
+      const {firstPage,lastPage,sliceStartInConcat,sliceEndInConcat} = tmdbPagesForUiPage(uiPage);
+      const r1 = await fetch(API.tmdbSearch(q, firstPage)).then(r=>r.json());
+      const r2 = (lastPage!==firstPage) ? await fetch(API.tmdbSearch(q, lastPage)).then(r=>r.json()) : {results:[]};
+      const total = r1.total_results ?? 0;
+      const combined = [...(r1.results||[]), ...(r2.results||[])];
+      return { items: combined.slice(sliceStartInConcat, sliceEndInConcat), total };
+    }
+    async function fetchTrendingPaged(uiPage){
+      const {firstPage,lastPage,sliceStartInConcat,sliceEndInConcat} = tmdbPagesForUiPage(uiPage);
+      const r1 = await fetch(API.tmdbTrending(firstPage)).then(r=>r.json());
+      const r2 = (lastPage!==firstPage) ? await fetch(API.tmdbTrending(lastPage)).then(r=>r.json()) : {results:[]};
+      const total = r1.total_results ?? 0;
+      const combined = [...(r1.results||[]), ...(r2.results||[])];
+      return { items: combined.slice(sliceStartInConcat, sliceEndInConcat), total };
+    }
+    async function fetchDiscoverGenrePaged(genreId, uiPage){
+      const {firstPage,lastPage,sliceStartInConcat,sliceEndInConcat} = tmdbPagesForUiPage(uiPage);
+      const r1 = await fetch(API.tmdbDiscover(`with_genres=${genreId}&page=${firstPage}`)).then(r=>r.json());
+      const r2 = (lastPage!==firstPage) ? await fetch(API.tmdbDiscover(`with_genres=${genreId}&page=${lastPage}`)).then(r=>r.json()) : {results:[]};
+      const total = r1.total_results ?? 0;
+      const combined = [...(r1.results||[]), ...(r2.results||[])];
+      return { items: combined.slice(sliceStartInConcat, sliceEndInConcat), total };
+    }
+    async function fetchPersonCrewPaged(personId, role, uiPage){
+      // TMDB retorna tudo de uma vez; paginamos no cliente
+      const data = await fetch(API.tmdbPersonCredits(personId)).then(r=>r.json());
+      const crew = (data.crew||[]).filter(c=>{
+        if(role==='director') return c.job==='Director';
+        if(role==='writer') return ['Screenplay','Writer','Story','Adaptation'].includes(c.job);
+        if(role==='editor') return c.job==='Editor';
+        return false;
+      });
+      const uniq = new Map();
+      crew.forEach(c=>{
+        if(!uniq.has(c.id)) uniq.set(c.id, {id:c.id, title:c.title, poster_path:c.poster_path, release_date:c.release_date, vote_average:c.vote_average});
+      });
+      const all = [...uniq.values()];
+      const total = all.length;
+      const start = (uiPage-1)*UI_PAGE_SIZE;
+      return { items: all.slice(start, start+UI_PAGE_SIZE), total };
+    }
+
+    // ===== Renderer =====
     function renderResults(list, contextText=''){
       $('#results').innerHTML = (list||[]).map(card).join('');
       processRenderedCards();
@@ -331,29 +371,51 @@
       window.scrollTo({top:0, behavior:'smooth'});
     }
 
+    // ===== Query state (para paginação) =====
+    let currentQuery = null; // { kind, params, page, total, fetch(uiPage) }
+
+    async function loadPage(uiPage){
+      if(!currentQuery) return;
+      const { kind, params } = currentQuery;
+      let res;
+      if(kind==='search') res = await fetchSearchPaged(params.q, uiPage);
+      if(kind==='trending') res = await fetchTrendingPaged(uiPage);
+      if(kind==='genre') res = await fetchDiscoverGenrePaged(params.genreId, uiPage);
+      if(kind==='person') res = await fetchPersonCrewPaged(params.personId, params.role, uiPage);
+
+      const totalPages = Math.max(1, Math.ceil((res.total||0) / UI_PAGE_SIZE));
+      currentQuery.page = Math.min(uiPage, totalPages);
+      currentQuery.total = res.total||0;
+
+      renderResults(res.items, currentQuery.context || '');
+      renderPager(totalPages, currentQuery.page, p=>loadPage(p));
+    }
+
+    // ===== Network simples =====
+    async function searchMovies(q){ const r = await fetch(API.tmdbSearch(q)); return r.json(); } // só pra "achei N resultados"
+    async function trending(){ const r = await fetch(API.tmdbTrending()); return r.json(); }
+
     // ===== Bindings =====
     function bind(){
       $('#btnSearch').onclick = async ()=>{
         const q = $('#q').value.trim(); if(!q) return;
-        const data = await searchMovies(q);
-        renderResults(data.results, `Resultados para “${q}”`);
+        currentQuery = { kind:'search', params:{q}, page:1, context:`Resultados para “${q}”` };
+        await loadPage(1);
       };
       $('#q').addEventListener('keydown', (e)=>{ if(e.key==='Enter') $('#btnSearch').click(); });
 
       $('#btnPopular').onclick = async ()=>{
-        const t = await trending();
-        renderResults(t.results, 'Tendências do dia');
+        currentQuery = { kind:'trending', params:{}, page:1, context:'Tendências do dia' };
+        await loadPage(1);
       };
 
-      // Ações nas cards
-      $('#results').addEventListener('click', async (e)=>{
+      // Cards: abrir / toggles
+      document.getElementById('results').addEventListener('click', async (e)=>{
         const card = e.target.closest('.card'); if(!card) return;
         const id = Number(card.dataset.id);
 
-        // abrir detalhes
         if(e.target.matches('.poster,[data-open]')){ showDetails(id); return; }
 
-        // toggle em listas
         const btn = e.target.closest('button'); if(!btn) return;
         const act = btn.dataset.action; if(!act) return;
 
@@ -365,7 +427,6 @@
           applyStateToCard(card, id);
           toast('Removido.');
         }else{
-          // pegar meta para salvar título/poster
           const meta = await (await fetch(API.tmdbMovie(id))).json();
           pushItem(s, act, { id, status: act, title: meta.title, poster_path: meta.poster_path });
           setStore(s);
@@ -378,50 +439,44 @@
       $('#mClose').onclick = ()=> document.getElementById('movieModal').close();
       $('#mZero').onclick = ()=>{ if(currentMovieId){ setRating(currentMovieId, 0); renderStars(document.getElementById('mStars'), currentMovieId); } };
 
-      // Filtros clicáveis dentro do modal
+      // Filtros no modal
       document.getElementById('movieModal').addEventListener('click', async (e)=>{
-        // por gênero
         if(e.target.dataset.genre){
           const gid = Number(e.target.dataset.genre);
-          const name = e.target.textContent.trim();
-          const data = await discoverByGenre(gid);
-          renderResults(data.results, `Gênero: ${name}`);
+          currentQuery = { kind:'genre', params:{genreId:gid}, page:1, context:`Gênero: ${e.target.textContent.trim()}` };
+          await loadPage(1);
           document.getElementById('movieModal').close();
           return;
         }
-        // por pessoa/role
         if(e.target.dataset.person){
           const pid = Number(e.target.dataset.person);
-          const role = e.target.dataset.role; // director | writer | editor
-          const name = e.target.textContent.trim();
-          const data = await moviesByPerson(pid); // {cast, crew}
-          const crew = (data.crew||[]).filter(c=>{
-            if(role==='director') return c.job==='Director';
-            if(role==='writer') return ['Screenplay','Writer','Story','Adaptation'].includes(c.job);
-            if(role==='editor') return c.job==='Editor';
-            return false;
-          });
-          // mapear para shape de movie
-          const uniq = new Map();
-          crew.forEach(c=>{
-            if(!uniq.has(c.id)) uniq.set(c.id, {id:c.id, title:c.title, poster_path:c.poster_path, release_date:c.release_date, vote_average:c.vote_average});
-          });
-          renderResults([...uniq.values()], `${role==='director'?'Diretor':role==='writer'?'Roteirista':'Editor'}: ${name}`);
+          const role = e.target.dataset.role;
+          currentQuery = { kind:'person', params:{personId:pid, role}, page:1, context:`${role==='director'?'Diretor':role==='writer'?'Roteirista':'Editor'}: ${e.target.textContent.trim()}` };
+          await loadPage(1);
           document.getElementById('movieModal').close();
         }
       });
     }
 
+    // ===== Deep link (opcional) =====
+    function getParams(){
+      const p = new URLSearchParams(location.search);
+      return { genre: p.get('genre'), person: p.get('person'), role: p.get('role') };
+    }
+    async function applyDeepLink(){
+      const { genre, person, role } = getParams();
+      if (genre) { currentQuery = { kind:'genre', params:{genreId:Number(genre)}, page:1, context:'Gênero filtrado' }; await loadPage(1); return true; }
+      if (person) { currentQuery = { kind:'person', params:{personId:Number(person), role: role||'director'}, page:1, context:'Pessoa filtrada' }; await loadPage(1); return true; }
+      return false;
+    }
+
     // ===== Init =====
     (async function(){
       bind();
-      try{
-        if (!(await applyDeepLink())) {
-          const t = await trending();
-          renderResults(t.results, 'Tendências do dia');
-        }
-      }catch{
-        $('#results').innerHTML = '';
+      // inicial: tendências ou deep link
+      if(!(await applyDeepLink())){
+        currentQuery = { kind:'trending', params:{}, page:1, context:'Tendências do dia' };
+        await loadPage(1);
       }
     })();
   </script>
