@@ -99,7 +99,7 @@
       <div class="row muted">Modo: <b>single-user</b></div>
       <div id="session" class="row">
         <span id="who" class="muted"></span>
-        <button id="loginBtn">Entrar</button>
+        <button id="loginBtn" type="button" onclick="openAuthModal()">Entrar</button>
         <button id="logoutBtn" style="display:none">Sair</button>
       </div>
     </div>
@@ -445,7 +445,24 @@
         updateSessionUI();
       });
     })();
+
+    function openAuthModal() {
+      const m   = document.getElementById('authModal');
+      const msg = document.getElementById('authMsg');
+      if (!m) return;
+      if (msg) msg.textContent = '';
+      if (typeof m.showModal === 'function') m.showModal();
+      else m.setAttribute('open', ''); // fallback se <dialog> não suportar showModal
+    }
   
+    // (opcional) garantir o fechar
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('authClose')?.addEventListener('click', () => {
+        const m = document.getElementById('authModal');
+        if (m?.close) m.close(); else m?.removeAttribute('open');
+      });
+    });
+    
     // Inicializa sessão
     whoami().then(async (u)=>{ if(u) await loadServerStore(); });
 </script>
